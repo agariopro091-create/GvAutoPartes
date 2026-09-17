@@ -12,7 +12,7 @@ interface TrackedItem extends InventoryItem {
   qtyReceived: number | null;
 }
 
-const STORAGE_KEY = 'guzimport_inventory_data';
+const STORAGE_KEY = 'gvautopartes_inventory_data';
 
 const allItems: TrackedItem[] = inventoryData.flatMap(category => 
   category.items.map((item, idx) => ({
@@ -116,8 +116,8 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
 }
 
 // Configuración de autenticación
-const AUTH_KEY = 'guzimport_auth';
-const DEFAULT_PASSWORD = 'guzimport2026'; // Contraseña por defecto
+const AUTH_KEY = 'gvautopartes_auth';
+const DEFAULT_PASSWORD = 'gvautopartes2026'; // Contraseña por defecto
 
 function checkAuth(): boolean {
   const auth = localStorage.getItem(AUTH_KEY);
@@ -195,8 +195,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🔐</div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">GUZIMPORT, C.A.</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">GvAutoPartes</h1>
           <p className="text-gray-500">Sistema de Inventario Privado</p>
+          <p className="text-xs text-gray-400 mt-2">Proveedor: Guzimport, C.A.</p>
         </div>
 
         {!showChangePassword ? (
@@ -310,7 +311,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
         <div className="mt-8 pt-6 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-400">
-            Documento: 80010868 | Cliente: AUTOPARTES GV 2023 C.A.
+            Documento: 80010868 | Proveedor: Guzimport, C.A.
           </p>
         </div>
       </div>
@@ -518,11 +519,11 @@ export default function App() {
     
     let csvContent = "\uFEFF";
     
-    csvContent += "GUZIMPORT, C.A.;;;;;;;;;;\n";
+    csvContent += "GvAutoPartes;;;;;;;;;;\n";
     csvContent += "REPORTE DE INVENTARIO FISICO VS DESPACHO;;;;;;;;;;\n";
     csvContent += ";;;;;;;;;;\n";
     csvContent += `Documento:;80010868;;;Fecha:;${fecha};;;;\n`;
-    csvContent += `Hora de Exportacion:;${hora};;;Cliente:;AUTOPARTES GV 2023 C.A.;;;;\n`;
+    csvContent += `Hora de Exportacion:;${hora};;;Proveedor:;Guzimport, C.A.;;;;\n`;
     csvContent += ";;;;;;;;;;\n";
     csvContent += "================================================================================\n";
     csvContent += "RESUMEN GENERAL;;;;;;;;;;\n";
@@ -578,15 +579,15 @@ export default function App() {
     csvContent += ";;;;;;;;;;\n";
     csvContent += "NOTAS;;;;;;;;;;\n";
     csvContent += "La columna 'Precio Venta' esta vacia para que usted pueda completar los precios.;;;;;;;;;;\n";
-    csvContent += "Este reporte fue generado automaticamente por el sistema de inventario de Guzimport.;;;;;;;;;;\n";
-    csvContent += ";;;;;;;;;;\n";
-    csvContent += "GUZIMPORT, C.A. | Pedido Minimo 3000$ | Solo Pago en Divisas;;;;;;;;;;\n";
+    csvContent += "Este reporte fue generado automaticamente por el sistema de inventario de GvAutoPartes.;;;;;;;;;;\n";
+    csvContent += "Proveedor: Guzimport, C.A.;;;;;;;;;;\n";
+    csvContent += "GvAutoPartes - Sistema Privado de Inventario;;;;;;;;;;\n";
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `Inventario_Guzimport_${fecha.replace(/\//g, '-')}.csv`);
+    link.setAttribute("download", `Inventario_GvAutoPartes_${fecha.replace(/\//g, '-')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -601,7 +602,7 @@ export default function App() {
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
-      link.setAttribute("download", `Respaldo_Inventario_Guzimport_${fecha}.json`);
+      link.setAttribute("download", `Respaldo_Inventario_GvAutoPartes_${fecha}.json`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -662,7 +663,7 @@ export default function App() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventario Guzimport - ${fecha}</title>
+  <title>Inventario GvAutoPartes - ${fecha}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; padding: 20px; }
@@ -694,9 +695,9 @@ export default function App() {
 </head>
 <body>
   <div class="container">
-    <h1>📦 Control de Inventario Físico vs Despacho</h1>
+    <h1>📦 GvAutoPartes - Control de Inventario</h1>
     <p class="subtitle">Edita las cantidades. El estado se calcula automáticamente.</p>
-    <p class="subtitle">Documento: 80010868 | Fecha: ${fecha} | Cliente: AUTOPARTES GV 2023 C.A.</p>
+    <p class="subtitle">Documento: 80010868 | Fecha: ${fecha} | Proveedor: Guzimport, C.A.</p>
     
     <table>
       <thead>
@@ -791,7 +792,7 @@ export default function App() {
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
-      link.setAttribute("download", `Inventario_Guzimport_${fecha}.html`);
+      link.setAttribute("download", `Inventario_GvAutoPartes_${fecha}.html`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -827,9 +828,9 @@ export default function App() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">📦 Control de Inventario Físico vs Despacho</h1>
+            <h1 className="text-2xl font-bold text-gray-800">📦 GvAutoPartes - Control de Inventario</h1>
             <p className="text-gray-500 text-sm mt-1">Edita las cantidades. El estado se calcula automáticamente.</p>
-            <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 07/09/2026 | Cliente: AUTOPARTES GV 2023 C.A.</p>
+            <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 07/09/2026 | Proveedor: Guzimport, C.A.</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap gap-2 justify-end">
@@ -1064,8 +1065,8 @@ export default function App() {
 
         {/* Footer */}
         <div className="mt-6 pt-4 border-t border-gray-200 text-center">
-          <p className="text-xs text-gray-400">Documento generado para control de inventario y etiquetado por modelo/marca de vehículo.</p>
-          <p className="text-xs text-gray-400 mt-1"><strong className="text-gray-600">GUZIMPORT, C.A.</strong> | Pedido Mínimo 3000$ — Solo Pago en Divisas</p>
+          <p className="text-xs text-gray-400">Sistema de control de inventario y etiquetado por modelo/marca de vehículo.</p>
+          <p className="text-xs text-gray-400 mt-1"><strong className="text-gray-600">GvAutoPartes</strong> | Proveedor: Guzimport, C.A.</p>
         </div>
 
         {/* Modal Agregar Pieza */}

@@ -1,8 +1,8 @@
-# 🚀 GUÍA COMPLETA: Subir tu Sistema a GitHub con Contraseña
+# 🚀 GUÍA COMPLETA: Subir tu Sistema de GvAutoPartes a GitHub con Contraseña
 
 ## ✅ Lo que ya tienes listo:
 
-1. ✅ Sistema de inventario completo
+1. ✅ Sistema de inventario completo para GvAutoPartes
 2. ✅ Pantalla de login con contraseña
 3. ✅ Todas las funcionalidades funcionando
 4. ✅ README.md creado
@@ -58,8 +58,8 @@ git config --global user.email "tu-email@ejemplo.com"
 
 1. Ve a [github.com/new](https://github.com/new)
 2. Llena los campos:
-   - **Repository name:** `guzimport-inventario`
-   - **Description:** `Sistema de inventario privado - GUZIMPORT`
+   - **Repository name:** `gvautopartes-inventario`
+   - **Description:** `Sistema de inventario privado - GvAutoPartes`
    - **⚠️ Selecciona: Private** (MUY IMPORTANTE)
    - **NO marques** "Add a README file"
    - **NO marques** "Add .gitignore"
@@ -87,7 +87,7 @@ git branch -M main
 
 # Conectar con tu repositorio de GitHub
 # ⚠️ CAMBIA "TU-USUARIO" por tu usuario real de GitHub
-git remote add origin https://github.com/TU-USUARIO/guzimport-inventario.git
+git remote add origin https://github.com/TU-USUARIO/gvautopartes-inventario.git
 
 # Subir el código
 git push -u origin main
@@ -120,7 +120,7 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/guzimport-inventario/' // ← AGREGA ESTA LÍNEA
+  base: '/gvautopartes-inventario/' // ← AGREGA ESTA LÍNEA
 })
 ```
 
@@ -160,11 +160,11 @@ git push
 Después de 2-3 minutos, tu web estará en:
 
 ```
-https://TU-USUARIO.github.io/guzimport-inventario/
+https://TU-USUARIO.github.io/gvautopartes-inventario/
 ```
 
 **Primera vez que entras:**
-- Contraseña por defecto: `guzimport2026`
+- Contraseña por defecto: `gvautopartes2026`
 - **CÁMBIALA INMEDIATAMENTE** usando el botón "¿Cambiar contraseña?"
 
 ---
@@ -187,7 +187,7 @@ Si no quieres pagar GitHub Pro, usa **Vercel** (100% gratis):
 
 **Tu URL será algo como:**
 ```
-https://guzimport-inventario.vercel.app
+https://gvautopartes-inventario.vercel.app
 ```
 
 **Ventajas de Vercel:**
@@ -230,8 +230,8 @@ https://guzimport-inventario.vercel.app
 ```bash
 git init
 git add .
-git commit -m "Sistema de inventario"
-git remote add origin https://github.com/TU-USUARIO/guzimport-inventario.git
+git commit -m "Sistema de inventario GvAutoPartes"
+git remote add origin https://github.com/TU-USUARIO/gvautopartes-inventario.git
 git push -u origin main
 # Luego activa GitHub Pages en Settings
 ```
@@ -241,8 +241,8 @@ git push -u origin main
 # Sube tu código a GitHub primero
 git init
 git add .
-git commit -m "Sistema de inventario"
-git remote add origin https://github.com/TU-USUARIO/guzimport-inventario.git
+git commit -m "Sistema de inventario GvAutoPartes"
+git remote add origin https://github.com/TU-USUARIO/gvautopartes-inventario.git
 git push -u origin main
 
 # Luego ve a vercel.com y conecta tu repositorio
@@ -254,7 +254,7 @@ git push -u origin main
 
 ### **"La página no carga después de hacer deploy"**
 - Espera 2-3 minutos
-- Verifica que el archivo `vite.config.js` tenga la línea `base: '/guzimport-inventario/'`
+- Verifica que el archivo `vite.config.js` tenga la línea `base: '/gvautopartes-inventario/'`
 - Haz push de los cambios
 
 ### **"No puedo hacer push a GitHub"**
@@ -262,7 +262,7 @@ git push -u origin main
 - Asegúrate de que el repositorio sea privado
 
 ### **"La contraseña no funciona"**
-- Contraseña por defecto: `guzimport2026`
+- Contraseña por defecto: `gvautopartes2026`
 - Si la cambiaste, usa la nueva contraseña
 - Si la olvidaste, borra el localStorage del navegador
 

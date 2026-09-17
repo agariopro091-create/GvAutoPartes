@@ -1,10 +1,10 @@
-# 📦 Sistema de Inventario Físico vs Despacho - GUZIMPORT
+# 📦 Sistema de Inventario - GvAutoPartes
 
 Sistema web privado para control de inventario físico vs despacho de autopartes.
 
 ## 🔐 Acceso
 
-**Contraseña por defecto:** `guzimport2026`
+**Contraseña por defecto:** `gvautopartes2026`
 
 ⚠️ **IMPORTANTE:** Cambia la contraseña después del primer acceso usando el botón "¿Cambiar contraseña?" en la pantalla de login.
 
@@ -119,12 +119,11 @@ npm run build
 
 ## 📞 Soporte
 
-**GUZIMPORT, C.A.**
+**GvAutoPartes**
 - Documento: 80010868
-- Cliente: AUTOPARTES GV 2023 C.A.
-- Pedido Mínimo: 3000$
-- Solo Pago en Divisas
+- Proveedor: Guzimport, C.A.
+- Sistema Privado de Inventario
 
 ---
 
-© 2026 GUZIMPORT, C.A. - Sistema Privado
+© 2026 GvAutoPartes - Sistema Privado
