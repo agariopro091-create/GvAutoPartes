@@ -115,13 +115,222 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
   );
 }
 
+// Configuración de autenticación
+const AUTH_KEY = 'guzimport_auth';
+const DEFAULT_PASSWORD = 'guzimport2026'; // Contraseña por defecto
+
+function checkAuth(): boolean {
+  const auth = localStorage.getItem(AUTH_KEY);
+  return auth === 'authenticated';
+}
+
+function login(password: string): boolean {
+  // Obtener contraseña actual (o usar la por defecto)
+  const savedPassword = localStorage.getItem('guzimport_password') || DEFAULT_PASSWORD;
+  
+  if (password === savedPassword) {
+    localStorage.setItem(AUTH_KEY, 'authenticated');
+    return true;
+  }
+  return false;
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_KEY);
+}
+
+function changePassword(oldPassword: string, newPassword: string): boolean {
+  const savedPassword = localStorage.getItem('guzimport_password') || DEFAULT_PASSWORD;
+  
+  if (oldPassword === savedPassword) {
+    localStorage.setItem('guzimport_password', newPassword);
+    return true;
+  }
+  return false;
+}
+
+// Componente de Login
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (login(password)) {
+      onLogin();
+    } else {
+      setError('Contraseña incorrecta');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPass !== confirmPass) {
+      setError('Las contraseñas nuevas no coinciden');
+      return;
+    }
+    if (newPass.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (changePassword(oldPass, newPass)) {
+      alert('✅ Contraseña cambiada exitosamente');
+      setShowChangePassword(false);
+      setOldPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setError('');
+    } else {
+      setError('La contraseña actual es incorrecta');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">GUZIMPORT, C.A.</h1>
+          <p className="text-gray-500">Sistema de Inventario Privado</p>
+        </div>
+
+        {!showChangePassword ? (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                placeholder="Ingresa tu contraseña"
+                autoFocus
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                ❌ {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+            >
+              🔓 Iniciar Sesión
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowChangePassword(true)}
+              className="w-full text-gray-500 hover:text-gray-700 text-sm underline"
+            >
+              ¿Cambiar contraseña?
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Cambiar Contraseña</h2>
+            
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Contraseña Actual
+              </label>
+              <input
+                type="password"
+                value={oldPass}
+                onChange={(e) => setOldPass(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Nueva Contraseña
+              </label>
+              <input
+                type="password"
+                value={newPass}
+                onChange={(e) => setNewPass(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                required
+                minLength={6}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Confirmar Nueva Contraseña
+              </label>
+              <input
+                type="password"
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                required
+                minLength={6}
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                ❌ {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+              >
+                💾 Guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChangePassword(false);
+                  setError('');
+                }}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
+              >
+                ❌ Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+          <p className="text-xs text-gray-400">
+            Documento: 80010868 | Cliente: AUTOPARTES GV 2023 C.A.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
   const [items, setItems] = useState<TrackedItem[]>(loadItems);
   const [currentFilter, setCurrentFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Si no está autenticado, mostrar pantalla de login
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
   
   // Estados para el modal de agregar pieza
   const [showAddModal, setShowAddModal] = useState(false);
@@ -660,6 +869,18 @@ export default function App() {
                 title="Resetear todos los datos a valores originales"
               >
                 🔄 Resetear
+              </button>
+              <button 
+                onClick={() => {
+                  if (window.confirm('¿Cerrar sesión?')) {
+                    logout();
+                    setIsAuthenticated(false);
+                  }
+                }} 
+                className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md flex items-center gap-2 font-semibold transition-colors text-sm"
+                title="Cerrar sesión"
+              >
+                🚪 Salir
               </button>
             </div>
             <input
