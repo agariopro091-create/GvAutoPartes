@@ -14,7 +14,7 @@ interface TrackedItem extends InventoryItem {
   unitPrice: number;
 }
 
-const STORAGE_KEY = 'gvautopartes_inventory_data_v3';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v4';
 
 const allItems: TrackedItem[] = inventoryData.flatMap(category => 
   category.items.map((item, idx) => ({
