@@ -353,12 +353,12 @@ export const inventoryData: Category[] = [
     id: 14,
     name: "Aceites de Motor",
     items: [
-      { sku: "ART-014946", description: "ACEITE MOBIL SUPER 2000 10W30 CAJA 12*0.95LTS", vehicles: "Universal / Multimarca (Motores a gasolina que requieran viscosidad 10W30)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
-      { sku: "ART-014963", description: "ACEITE LUBREX MINERAL VELOCITY GX9 SAE 20W50 SL/CF CAJA 12X1LT", vehicles: "Universal / Multimarca (Motores que requieran viscosidad 20W50 SL/CF)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
-      { sku: "ART-014868", description: "ACEITE MOBIL M-SUPER 1000 20W-50 CAJA 12*1/0.946LT", vehicles: "Universal / Multimarca (Motores que requieran viscosidad mineral 20W50)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
-      { sku: "ART-015027", description: "ACEITE MOBIL SUPER 2000 X1 GASOLINA 10W40 SEMI SINTETICO CAJA 12X0.95L/0.25USG", vehicles: "Universal / Multimarca (Motores a gasolina que requieran viscosidad semi-sintética 10W40)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
-      { sku: "ART-014908", description: "MOBIL SPECIAL ALTO KILOMETRAJE 25W50 12X0.95L/0.25USG", vehicles: "Universal / Multimarca (Motores con alto kilometraje que requieran viscosidad 25W50)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
-      { sku: "ART-014964", description: "ACEITE LUBREX MINERAL VELOCITY NANO SAE 15W40 SM/CF CAJA 12X1LT", vehicles: "Universal / Multimarca (Motores que requieran viscosidad mineral 15W40 SM/CF)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-014946", description: "Mobil Super 2000 10W30 CAJA 12x0.95LTS", vehicles: "Vehículos a gasolina que requieran aceite semi-sintético o mineral de viscosidad SAE 10W-30", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-014963", description: "Lubrex Mineral Velocity GX9 SAE 20W50 SL/CF CAJA 12x1LT", vehicles: "Motores a gasolina o diésel ligero que requieran viscosidad SAE 20W-50 con clasificación API SL/CF", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-014868", description: "Mobil M-Super 1000 20W-50 CAJA 12x0.946LT", vehicles: "Vehículos a gasolina que utilicen aceite mineral de viscosidad SAE 20W-50", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-015027", description: "Mobil Super 2000 X1 10W40 Semi Sintético CAJA 12x0.95L", vehicles: "Vehículos a gasolina de pasajeros o suvs que requieran viscosidad semi-sintética SAE 10W-40", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-014908", description: "Mobil Special Alto Kilometraje 25W50 CAJA 12x0.95L", vehicles: "Vehículos con más de 100,000 km que requieran aceite de mayor viscosidad SAE 25W-50", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
+      { sku: "ART-014964", description: "Lubrex Mineral Velocity Nano SAE 15W40 SM/CF CAJA 12x1LT", vehicles: "Motores a gasolina o diésel que requieran aceite mineral de viscosidad SAE 15W-40 API SM/CF", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Aceites de Motor" },
     ]
   }
 ];
