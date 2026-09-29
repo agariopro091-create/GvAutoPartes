@@ -294,8 +294,8 @@ export const unitPrices: Record<string, number> = {
   "77501-87401-D": 7.02,
   
   // Aceites de Motor
-  "ART-014946": 8.91,
-  "ART-014963": 7.49,
+  "ART-014946": 10.42,
+  "ART-014963": 8.75,
   "ART-014868": 8.75,
   "ART-015027": 9.58,
   "ART-014908": 8.33,
