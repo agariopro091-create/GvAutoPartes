@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { getFirestore } from "firebase/firestore";
 // TODO: Reemplaza esta configuración con tus credenciales de Firebase
 // Ve a Firebase Console > Project Settings > General > Your apps > Firebase SDK snippet
 const firebaseConfig = {
@@ -16,4 +16,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Exportar Firestore
-const analytics = getAnalytics(app);
+export const db = getFirestore(app);
