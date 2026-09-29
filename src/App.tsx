@@ -12,6 +12,7 @@ import {
   removeInventoryItem,
   replaceInventory,
   saveEditedInventoryItem,
+  applyOilInvoiceUnitCorrection,
   seedInventoryIfEmpty,
   updateInventoryFields,
   type InventoryPatch,
@@ -113,7 +114,7 @@ function InventoryApp({
   const [syncMessage, setSyncMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const firestoreReadyRef = useRef(false);
-  const seededRef = useRef(false);
+  const inventorySetupStartedRef = useRef(false);
   const pendingUpdatesRef = useRef(new Map<string, InventoryPatch>());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushingRef = useRef(false);
@@ -238,12 +239,33 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
   useEffect(() => {
     let isActive = true;
     firestoreReadyRef.current = false;
-    seededRef.current = false;
+    inventorySetupStartedRef.current = false;
     remoteItemsRef.current = [];
     setIsFirestoreReady(false);
     setItems([]);
     setSaveStatus('syncing');
     setSyncMessage('');
+
+    const initializeInventory = (shouldSeed: boolean) => {
+      if (inventorySetupStartedRef.current) return;
+      inventorySetupStartedRef.current = true;
+      setSaveStatus('syncing');
+      void (async () => {
+        if (shouldSeed) await seedInventoryIfEmpty(database, user.uid);
+        await applyOilInvoiceUnitCorrection(database, user.uid);
+      })().then(() => {
+        if (!isActive) return;
+        firestoreReadyRef.current = true;
+        setIsFirestoreReady(true);
+        setSaveStatus('saved');
+      }).catch(error => {
+        if (!isActive) return;
+        firestoreReadyRef.current = true;
+        setIsFirestoreReady(true);
+        setSaveStatus('error');
+        setSyncMessage(firebaseMessage(error));
+      });
+    };
 
     const unsubscribe = onSnapshot(
       collection(database, COLLECTION_NAME),
@@ -267,28 +289,12 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
         }
 
         setSyncMessage('');
-        if (snapshot.empty) {
-          firestoreReadyRef.current = false;
-          setIsFirestoreReady(false);
-          if (!seededRef.current) {
-            seededRef.current = true;
-            setSaveStatus('syncing');
-            void seedInventoryIfEmpty(database, user.uid).then(() => {
-              if (!isActive) return;
-              firestoreReadyRef.current = true;
-              setIsFirestoreReady(true);
-              setSaveStatus('saved');
-            }).catch(error => {
-              if (!isActive) return;
-              setSaveStatus('error');
-              setSyncMessage(firebaseMessage(error));
-            });
-          }
+        if (!inventorySetupStartedRef.current) {
+          initializeInventory(snapshot.empty);
           return;
         }
+        if (!firestoreReadyRef.current) return;
 
-        firestoreReadyRef.current = true;
-        setIsFirestoreReady(true);
         setSaveStatus(snapshot.metadata.hasPendingWrites ? 'saving' : 'saved');
       },
       error => {

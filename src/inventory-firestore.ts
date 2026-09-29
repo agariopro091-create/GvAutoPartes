@@ -116,6 +116,88 @@ export async function seedInventoryIfEmpty(database: Firestore, userId: string):
   });
 }
 
+const OIL_INVOICE_MIGRATION_ID = 'invoice-2026-09-25-oils-units-v1';
+const OIL_INVOICE_SKUS = [
+  'ART-014946',
+  'ART-014963',
+  'ART-014868',
+  'ART-015027',
+  'ART-014908',
+  'ART-014964',
+] as const;
+const OIL_UNITS_PER_CASE = 12;
+
+export async function applyOilInvoiceUnitCorrection(
+  database: Firestore,
+  userId: string,
+): Promise<void> {
+  const markerRef = doc(database, 'system', OIL_INVOICE_MIGRATION_ID);
+  const initialBySku = new Map(buildInitialInventory().map(item => [item.sku, item]));
+  const productRefs = OIL_INVOICE_SKUS.map(sku =>
+    doc(database, COLLECTION_NAME, getFirestoreDocumentId(sku)),
+  );
+
+  await runTransaction(database, async transaction => {
+    const [markerSnapshot, ...productSnapshots] = await Promise.all([
+      transaction.get(markerRef),
+      ...productRefs.map(productRef => transaction.get(productRef)),
+    ]);
+    if (markerSnapshot.exists()) return;
+
+    const updates = productSnapshots.map((snapshot, index) => {
+      const sku = OIL_INVOICE_SKUS[index];
+      if (!snapshot.exists()) {
+        const initialItem = initialBySku.get(sku);
+        if (!initialItem) throw new Error(`No se encontró la ficha inicial para ${sku}.`);
+        return { kind: 'create' as const, productRef: productRefs[index], item: initialItem };
+      }
+
+      const current = snapshot.data();
+      const quantities = [current.qtyPdf, current.qtyPhysical, current.qtyReceived];
+      if (!quantities.every(quantity => quantity === 1 || quantity === OIL_UNITS_PER_CASE)) {
+        throw new Error(
+          `No se aplicó la corrección: ${sku} ya tiene cantidades distintas de 1 o 12. No se modificó ningún producto.`,
+        );
+      }
+      return { kind: 'update' as const, productRef: productRefs[index] };
+    });
+
+    updates.forEach(update => {
+      if (update.kind === 'create') {
+        transaction.set(update.productRef, {
+          ...update.item,
+          id: update.productRef.id,
+          qtyPdf: OIL_UNITS_PER_CASE,
+          qtyPhysical: OIL_UNITS_PER_CASE,
+          qtyReceived: OIL_UNITS_PER_CASE,
+          unitPrice: unitPrices[update.item.sku] ?? 0,
+          status: 'ok',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: userId,
+          updatedBy: userId,
+        });
+        return;
+      }
+
+      transaction.update(update.productRef, {
+        qtyPdf: OIL_UNITS_PER_CASE,
+        qtyPhysical: OIL_UNITS_PER_CASE,
+        qtyReceived: OIL_UNITS_PER_CASE,
+        status: 'ok',
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+      });
+    });
+
+    transaction.set(markerRef, {
+      version: 1,
+      appliedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  });
+}
+
 export async function createInventoryItem(
   database: Firestore,
   item: TrackedItem,
