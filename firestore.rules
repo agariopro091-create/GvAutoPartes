@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasRole(roles) {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && get(userPath(request.auth.uid)).data.role in roles;
+    }
+
+    function validProduct(data) {
+      return data.keys().hasAll([
+          'id', 'sku', 'description', 'vehicles', 'qtyPdf', 'qtyPhysical',
+          'status', 'category', 'categoryId', 'inPdf', 'inExcel', 'inPhysical',
+          'qtyReceived', 'unitPrice', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasOnly([
+          'id', 'sku', 'description', 'vehicles', 'qtyPdf', 'qtyPhysical',
+          'status', 'category', 'categoryId', 'inPdf', 'inExcel', 'inPhysical',
+          'qtyReceived', 'unitPrice', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+        ])
+        && data.id is string
+        && data.sku is string && data.sku.size() > 0
+        && data.description is string && data.description.size() > 0
+        && data.vehicles is string
+        && data.category is string && data.category.size() > 0
+        && data.categoryId is int
+        && data.qtyPdf is int && data.qtyPdf >= 0
+        && (data.qtyPhysical == null || (data.qtyPhysical is int && data.qtyPhysical >= 0))
+        && (data.qtyReceived == null || (data.qtyReceived is int && data.qtyReceived >= 0))
+        && data.status in ['ok', 'missing', 'partial', 'pending', 'extra']
+        && data.unitPrice is number && data.unitPrice >= 0
+        && data.inPdf is bool && data.inExcel is bool && data.inPhysical is bool
+        && data.updatedAt is timestamp
+        && data.updatedBy is string
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('createdBy' in data) || data.createdBy is string);
+    }
+
+    match /inventory/{productId} {
+      allow read: if signedIn();
+      allow create, update: if hasRole(['admin', 'employee'])
+        && validProduct(request.resource.data);
+      allow delete: if hasRole(['admin', 'employee']);
+    }
+
+    match /system/{documentId} {
+      allow read: if signedIn();
+      allow create, update: if documentId == 'inventorySeed'
+        && hasRole(['admin', 'employee'])
+        && request.resource.data.keys().hasOnly([
+          'version', 'skippedExistingData', 'seededAt', 'updatedBy'
+        ])
+        && request.resource.data.version == 1
+        && request.resource.data.seededAt is timestamp
+        && request.resource.data.updatedBy is string;
+      allow delete: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn()
+        && (request.auth.uid == uid || hasRole(['admin']));
+      allow create, update: if hasRole(['admin'])
+        && request.resource.data.keys().hasOnly(['role', 'displayName', 'createdAt', 'updatedAt'])
+        && request.resource.data.role in ['admin', 'employee', 'viewer'];
+      allow delete: if hasRole(['admin']);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,129 +1,28 @@
-# 📦 Sistema de Inventario - GvAutoPartes
+# GvAutoPartes — Control de inventario
 
-Sistema web privado para control de inventario físico vs despacho de autopartes.
+Aplicación web para control de inventario físico y despacho de autopartes. Los productos se almacenan en Cloud Firestore y se sincronizan en tiempo real entre sesiones autenticadas.
 
-## 🔐 Acceso
+## Configuración
 
-**Contraseña por defecto:** `gvautopartes2026`
+Sigue [CONFIGURACION-FIREBASE.md](./CONFIGURACION-FIREBASE.md) para crear/configurar Firebase Authentication, Firestore, sus reglas y las variables `VITE_FIREBASE_*`. Las cuentas se crean en Firebase Console; no hay contraseña compartida ni registro público. Las reglas de Firestore controlan el acceso por roles.
 
-⚠️ **IMPORTANTE:** Cambia la contraseña después del primer acceso usando el botón "¿Cambiar contraseña?" en la pantalla de login.
+## Funcionalidades
 
-## 🚀 Deploy en GitHub Pages
+- Inventario sincronizado en tiempo real desde Firestore.
+- Edición de cantidades y precios con escrituras parciales.
+- Crear, editar y eliminar productos y categorías.
+- Búsqueda, filtros por estado/categoría y exportación Excel.
+- Respaldo JSON descargable e importación hacia Firestore.
+- Restablecimiento explícito del catálogo inicial.
+- Indicadores de sincronización, conexión y errores.
 
-### Paso 1: Preparar el repositorio
+## Desarrollo
 
-```bash
-# Inicializar git (si no lo has hecho)
-git init
-git add .
-git commit -m "Sistema de inventario Guzimport"
-```
+1. Configura las variables de Firebase de acuerdo con `.env.example` en `.env.local`.
+2. Ejecuta `npm install` y `npm run dev`.
+3. Para validar, ejecuta `npm run typecheck` y `npm run build`.
 
-### Paso 2: Crear repositorio en GitHub
+La configuración web que comienza por `VITE_` llega al navegador; no pongas claves de service account o credenciales administrativas en la app. No se usa localStorage como almacenamiento del inventario.
 
-1. Ve a [github.com/new](https://github.com/new)
-2. Nombre: `guzimport-inventario`
-3. **Selecciona "Private"** (privado)
-4. No inicialices con README
-5. Click en "Create repository"
+© 2026 GvAutoPartes
 
-### Paso 3: Subir el código
-
-```bash
-git remote add origin https://github.com/TU-USUARIO/guzimport-inventario.git
-git branch -M main
-git push -u origin main
-```
-
-### Paso 4: Configurar GitHub Pages
-
-1. Ve a tu repositorio en GitHub
-2. Click en **Settings** (Configuración)
-3. En el menú lateral, click en **Pages**
-4. En "Source", selecciona:
-   - **Branch:** `main`
-   - **Folder:** `/ (root)`
-5. Click en **Save**
-
-### Paso 5: Configurar Vite para GitHub Pages
-
-Edita el archivo `vite.config.js` y agrega `base`:
-
-```javascript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  base: '/guzimport-inventario/' // ← Agrega esta línea con el nombre de tu repo
-})
-```
-
-### Paso 6: Hacer deploy
-
-```bash
-# Instalar dependencias
-npm install
-
-# Compilar el proyecto
-npm run build
-
-# Subir los cambios
-git add .
-git commit -m "Configurar para GitHub Pages"
-git push
-```
-
-### Paso 7: Acceder a tu web
-
-Después de 1-2 minutos, tu web estará disponible en:
-
-```
-https://TU-USUARIO.github.io/guzimport-inventario/
-```
-
-## 🔒 Seguridad
-
-- ✅ Contraseña protegida
-- ✅ Repositorio privado en GitHub
-- ✅ URL no indexada en buscadores
-- ✅ Solo accesible con la URL + contraseña
-
-⚠️ **Nota:** La contraseña se guarda en el navegador (localStorage). Para máxima seguridad, no compartas la URL públicamente.
-
-## 📋 Funcionalidades
-
-- ✅ Gestión completa de inventario
-- ✅ 3 indicadores de estado (PDF, Excel, Físico)
-- ✅ Búsqueda inteligente (sin acentos)
-- ✅ Filtros por categoría y estado
-- ✅ Agregar, editar y eliminar piezas
-- ✅ Exportar a Excel (CSV) con columna de precios
-- ✅ Respaldos JSON
-- ✅ Exportar como HTML
-- ✅ Guardado automático
-- ✅ Sistema de login con contraseña
-
-## 🛠️ Desarrollo Local
-
-```bash
-# Instalar dependencias
-npm install
-
-# Ejecutar en modo desarrollo
-npm run dev
-
-# Compilar para producción
-npm run build
-```
-
-## 📞 Soporte
-
-**GvAutoPartes**
-- Documento: 80010868
-- Proveedor: Guzimport, C.A.
-- Sistema Privado de Inventario
-
----
-
-© 2026 GvAutoPartes - Sistema Privado
