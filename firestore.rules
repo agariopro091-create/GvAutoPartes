@@ -53,14 +53,20 @@ service cloud.firestore {
 
     match /system/{documentId} {
       allow read: if signedIn();
-      allow create, update: if documentId == 'inventorySeed'
-        && hasRole(['admin', 'employee'])
-        && request.resource.data.keys().hasOnly([
-          'version', 'skippedExistingData', 'seededAt', 'updatedBy'
-        ])
-        && request.resource.data.version == 1
-        && request.resource.data.seededAt is timestamp
-        && request.resource.data.updatedBy is string;
+      allow create, update: if hasRole(['admin', 'employee']) && (
+        (documentId == 'inventorySeed'
+          && request.resource.data.keys().hasOnly([
+            'version', 'skippedExistingData', 'seededAt', 'updatedBy'
+          ])
+          && request.resource.data.version == 1
+          && request.resource.data.seededAt is timestamp
+          && request.resource.data.updatedBy is string)
+        || (documentId == 'invoice-2026-09-25-oils-units-v1'
+          && request.resource.data.keys().hasOnly(['version', 'appliedAt', 'updatedBy'])
+          && request.resource.data.version == 1
+          && request.resource.data.appliedAt is timestamp
+          && request.resource.data.updatedBy is string)
+      );
       allow delete: if false;
     }
 
