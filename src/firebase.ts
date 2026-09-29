@@ -1,15 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-// TODO: Reemplaza esta configuración con tus credenciales de Firebase
-// Ve a Firebase Console > Project Settings > General > Your apps > Firebase SDK snippet
+// Configuración de Firebase - GvAutoPartes
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "TU_PROJECT_ID.firebaseapp.com",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_PROJECT_ID.appspot.com",
-  messagingSenderId: "TU_MESSAGING_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyAWr3jtWcOaAzKtIdvO5Ww1O1pddfH6k3Y",
+  authDomain: "gvautopartes-4889f.firebaseapp.com",
+  projectId: "gvautopartes-4889f",
+  storageBucket: "gvautopartes-4889f.firebasestorage.app",
+  messagingSenderId: "150608808279",
+  appId: "1:150608808279:web:9051afe3cfb9772e141612"
 };
 
 // Inicializar Firebase
