@@ -13,8 +13,19 @@ function readableAuthError(code?: string): string {
       return 'No fue posible conectar con Firebase. Revisa tu conexión.';
     case 'auth/invalid-email':
       return 'Escribe un correo electrónico válido.';
+    case 'auth/operation-not-allowed':
+      return 'Firebase no tiene habilitado el acceso con correo y contraseña. En Authentication → Sign-in method, habilita Email/Password.';
+    case 'auth/unauthorized-domain':
+      return 'Este dominio no está autorizado en Firebase. Agrégalo en Authentication → Settings → Authorized domains.';
+    case 'auth/user-disabled':
+      return 'Esta cuenta está deshabilitada en Firebase Authentication. Contacta al administrador del proyecto.';
+    case 'auth/invalid-api-key':
+    case 'auth/configuration-not-found':
+      return 'La configuración de Firebase no coincide con el proyecto o la app web. Verifica las variables VITE_FIREBASE_*.';
     default:
-      return 'No se pudo iniciar sesión. Verifica tu cuenta e inténtalo de nuevo.';
+      return code
+        ? `No se pudo iniciar sesión (Firebase: ${code}). Verifica la configuración de Authentication y la cuenta.`
+        : 'No se pudo iniciar sesión. Verifica tu cuenta e inténtalo de nuevo.';
   }
 }
 
