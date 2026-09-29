@@ -33,10 +33,10 @@ export const inventoryData: Category[] = [
       { sku: "4212-W", description: "Bujías Antienchumbe (4 Uds)", vehicles: "CHEVROLET SILVERADO, FORD TRITON, FORD F-150 (BOSCH)", qtyPdf: 24, qtyPhysical: 24, status: "ok", category: "Bujías" },
       { sku: "BL15Y-G", description: "Bujía Punta Carbón", vehicles: "FORD 302, FORD 255, FORD 351, FORD 400 / CHEVROLET 350, CHEVROLET 305, CHEVROLET 262 (CHAMPION)", qtyPdf: 30, qtyPhysical: 30, status: "ok", category: "Bujías" },
       { sku: "F14YC-G", description: "Bujía Punta Carbón", vehicles: "FORD 200-300, FORD F150, FORD F350, FORD BRONCO, FORD MAVERICK, FORD ZEPHYR, FORD FAIRMONT, FORD ASPEN, FORD FAIRLINE (CHAMPION)", qtyPdf: 30, qtyPhysical: 30, status: "ok", category: "Bujías" },
-      { sku: "BKR6E-11", description: "Bujía 5/8", vehicles: "CHEVROLET AVEO (NGK)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bujías" },
-      { sku: "BPR5EY", description: "Bujía", vehicles: "CHEVROLET CORSA (TODOS), CHEVROLET LUV, RENAULT, MITSUBISHI (NGK)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bujías" },
-      { sku: "LFR5AGP", description: "Bujía Especial G-Platinum", vehicles: "TOYOTAS V6 4.0, FUERA DE BORDA, HYUNDAI (G-PLATINIUM / NGK)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bujías" },
-      { sku: "TR55GP", description: "Bujía Especial G-Platinum", vehicles: "CHEVROLET VORTEC LS, FORD, MAZDA (G-PLATINIUM / NGK)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bujías" },
+      { sku: "BKR6E-11", description: "Bujía 5/8", vehicles: "CHEVROLET AVEO (NGK)", qtyPdf: 20, qtyPhysical: 20, status: "ok", category: "Bujías" },
+      { sku: "BPR5EY", description: "Bujía", vehicles: "CHEVROLET CORSA (TODOS), CHEVROLET LUV, RENAULT, MITSUBISHI (NGK)", qtyPdf: 10, qtyPhysical: 10, status: "ok", category: "Bujías" },
+      { sku: "LFR5AGP", description: "Bujía Especial G-Platinum", vehicles: "TOYOTAS V6 4.0, FUERA DE BORDA, HYUNDAI (G-PLATINIUM / NGK)", qtyPdf: 12, qtyPhysical: 12, status: "ok", category: "Bujías" },
+      { sku: "TR55GP", description: "Bujía Especial G-Platinum", vehicles: "CHEVROLET VORTEC LS, FORD, MAZDA (G-PLATINIUM / NGK)", qtyPdf: 8, qtyPhysical: 8, status: "ok", category: "Bujías" },
     ]
   },
   {
@@ -80,6 +80,7 @@ export const inventoryData: Category[] = [
       { sku: "90919-02164-W", description: "Bobina Encendido", vehicles: "TOYOTA COROLLA / TOYOTA BABY CAMRY / TOYOTA ARAYA / TOYOTA MERU / TOYOTA STARLET", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bobinas" },
       { sku: "90919-02258-D", description: "Bobina Encendido", vehicles: "TOYOTA COROLLA IMPORTADO IRANI 1.8 09-13 / TOYOTA YARIS 13-16", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bobinas" },
       { sku: "7700875000-W", description: "Bobina Encendido (Tapa Verde)", vehicles: "RENAULT CLIO / RENAULT SYMBOL / RENAULT MEGANE / RENAULT KANGOO / RENAULT SCENIC", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bobinas" },
+      { sku: "12YY166035N", description: "Bobina CLT 1.4 02-06", vehicles: "RENAULT CLIO II / RENAULT MEGAN I", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Bobinas" },
     ]
   },
   {
@@ -92,9 +93,9 @@ export const inventoryData: Category[] = [
       { sku: "23221-50100-W", description: "Pila Gasolina (Con Cuña)", vehicles: "TOYOTA 4RUNNER / TOYOTA PRADO", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Bombas y Pilas" },
       { sku: "23220-21132", description: "Pila de Gasolina", vehicles: "TOYOTA FORTUNER / TOYOTA HILUX / TOYOTA LAND CRUISER KAVAK / TOYOTA YARIS / TOYOTA COROLLA 1.8 / TOYOTA PRADO", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Bombas y Pilas" },
       { sku: "E2069", description: "Pila de Gasolina Universal con Retorno", vehicles: "CAJA NEGRA (BOSCH)", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Bombas y Pilas" },
-      { sku: "17AY214028S", description: "Bomba de Gasolina", vehicles: "2068 C.A. CARBO FUSION (YUKKAZO)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bombas y Pilas" },
-      { sku: "17AY204029N", description: "Bomba de Gasolina", vehicles: "TOYOTA COMPOTICA CARBO FUSION (YUKKAZO)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bombas y Pilas" },
-      { sku: "17AY031012N", description: "Pila Gasolina", vehicles: "CHEVROLET CHEYENNE 8 CIL MOT 5.3 (2007)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Bombas y Pilas" },
+      { sku: "17AY214028S", description: "Bomba de Gasolina", vehicles: "2068 C.A. CARBO FUSION (YUKKAZO)", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bombas y Pilas" },
+      { sku: "17AY204029N", description: "Bomba de Gasolina", vehicles: "TOYOTA COMPOTICA CARBO FUSION (YUKKAZO)", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bombas y Pilas" },
+      { sku: "17AY031012N", description: "Pila Gasolina", vehicles: "CHEVROLET CHEYENNE 8 CIL MOT 5.3 (2007)", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Bombas y Pilas" },
     ]
   },
   {
@@ -122,9 +123,12 @@ export const inventoryData: Category[] = [
       { sku: "8200713680-D", description: "Cable Bujía", vehicles: "RENAULT TWINGO 1.2 16V 06-10", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Cables de Bujías" },
       { sku: "ST-V25-W", description: "Cables de Bujías", vehicles: "VOLKSWAGEN FOX 1.6", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY031006V", description: "Cables Bujía", vehicles: "CHEVROLET AVEO LS 4CIL 1.6 (05/08) 16V", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
+      { sku: "11AY031005V", description: "Cables Bujía LS 4CIL 1.6 05/08 16V", vehicles: "CHEVROLET AVEO", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY031013V", description: "Cables Bujía", vehicles: "CHEVROLET GRAND BLAZER / CHEYENNE", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY031013Y", description: "Set de Cables con Disipador Metálico", vehicles: "CHEVROLET SILVERADO CORTO", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY062043V", description: "Cables Bujía", vehicles: "FORD FIESTA MOVE / KA / ECOSPORT 4CIL 1.6 (09/12, 01/08)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
+      { sku: "11AY052043V", description: "Cables Bujía 4CIL 1.6 09/12 01/08", vehicles: "FORD FIESTA MOVE / KA / ECOSPORT", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
+      { sku: "11CR052009N", description: "Cable Racing Silicon 8.8mm 4CIL 1.6L", vehicles: "FORD FIESTA / KA", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY031019N", description: "Cable Bujía", vehicles: "CHEVROLET SPARK 4CIL 1.0L (06/08) 8V", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY094068S", description: "Cables Bujía", vehicles: "JEEP CHEROKEE KK 3.7 (08-15)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY030002N", description: "Cables Bujía", vehicles: "CHERY ORINOCO 4CIL 1.8 (11/13) 16V", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
