@@ -1,222 +1,76 @@
-# 🔥 Guía de Configuración Firebase para GvAutoPartes
+# Configuración Firebase para GvAutoPartes
 
-## ✅ ¡Tu aplicación ya está conectada a Firebase!
+La app usa Firebase Authentication y Cloud Firestore. Firestore es la fuente de verdad y `onSnapshot` mantiene el inventario actualizado en los clientes conectados. La interfaz solo confirma una edición cuando la operación contra Firebase termina correctamente.
 
-Ahora tu equipo puede acceder al inventario en tiempo real desde cualquier dispositivo. Los cambios se sincronizan automáticamente.
+## 1. Crear o seleccionar un proyecto
 
----
+1. Abre [tu proyecto Firebase](https://console.firebase.google.com/project/gvautopartes-4889f/overview) (`gvautopartes-4889f`).
+2. En **Build → Firestore Database**, crea la base de datos en producción y elige una región cercana a tus usuarios.
+3. En **Project settings → General → Your apps**, registra una aplicación web y copia su configuración web. El ID de proyecto y el dominio de autenticación ya están indicados en `.env.example`; la API key, el ID del remitente y el ID de la app web deben copiarse de esta configuración.
 
-## 📋 Pasos para Configurar Firebase
+La configuración del Firebase Web SDK (incluida su API key) se distribuye al navegador; no es una credencial administrativa. Las reglas de Firestore son las que protegen los datos. Nunca pongas una service-account key en variables `VITE_` ni en el frontend.
 
-### **Paso 1: Crear Proyecto en Firebase**
+## 2. Variables de entorno
 
-1. Ve a [Firebase Console](https://console.firebase.google.com/)
-2. Click en **"Agregar proyecto"** o **"Add project"**
-3. Nombre del proyecto: `gvautopartes-inventario` (o el que prefieras)
-4. Acepta los términos y click en **"Continuar"**
-5. Desactiva Google Analytics (opcional) y click en **"Crear proyecto"**
+Copia `.env.example` a `.env.local` para desarrollo, o configura estas variables en Vercel **Settings → Environment Variables** para los entornos Development, Preview y Production:
 
----
-
-### **Paso 2: Crear Base de Datos Firestore**
-
-1. En el menú lateral izquierdo, click en **"Firestore Database"**
-2. Click en **"Crear base de datos"**
-3. Selecciona **"Comenzar en modo de prueba"** (para empezar)
-4. Ubicación: `us-central1` (o la más cercana a ti)
-5. Click en **"Habilitar"**
-
-⚠️ **IMPORTANTE:** Después de probar, cambia las reglas de seguridad:
-- Ve a la pestaña **"Reglas"**
-- Reemplaza el contenido con:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /inventory/{document=**} {
-      allow read, write: if true; // Para desarrollo
-      // Para producción, usa autenticación:
-      // allow read, write: if request.auth != null;
-    }
-  }
-}
+```text
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET (opcional; la app no usa Firebase Storage)
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
 ```
 
----
+Usa los valores de la aplicación web de Firebase. No edites `src/firebase.ts` para pegar credenciales. `.env.local` está excluido de Git.
 
-### **Paso 3: Registrar tu Aplicación Web**
+## 3. Habilitar autenticación y crear cuentas
 
-1. En la página principal del proyecto, busca **"Tus aplicaciones"**
-2. Click en el ícono **Web** (`</>`)
-3. Nombre del app: `GvAutoPartes Web`
-4. **NO** marques "Configurar también Firebase Hosting"
-5. Click en **"Registrar app"**
+1. En Firebase Console abre **Build → Authentication → Get started**.
+2. En **Sign-in method**, habilita **Email/Password**.
+3. En **Users**, crea una cuenta para cada integrante. La app permite iniciar sesión; no ofrece registro público.
+4. Copia el UID de cada usuario creado. En Firestore crea la colección `users`, un documento cuyo ID sea ese UID y el campo `role`:
+   - `admin`: lectura, escritura y administración de roles en las reglas.
+   - `employee`: lectura y edición del inventario.
+   - `viewer`: solo lectura.
+5. Para el primer administrador, crea su documento `users/{UID}` desde Firebase Console. La consola administrativa no está restringida por las reglas de clientes.
 
----
+La aplicación no tiene una pantalla para asignar roles. Los roles se administran en Firebase Console hasta que se solicite una interfaz administrativa.
 
-### **Paso 4: Copiar Configuración de Firebase**
+## 4. Aplicar reglas de Firestore
 
-Firebase te mostrará un objeto de configuración como este:
+En **Firestore Database → Rules**, copia y publica el contenido de `firestore.rules`. No uses reglas abiertas (`allow read, write: if true`). Las reglas requieren una sesión Firebase y un documento de rol en `users/{UID}`; lectores pueden consultar, y solo `admin`/`employee` pueden modificar productos. Solo `admin` puede administrar documentos de usuario.
 
-```javascript
-const firebaseConfig = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  authDomain: "gvautopartes-inventario.firebaseapp.com",
-  projectId: "gvautopartes-inventario",
-  storageBucket: "gvautopartes-inventario.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef1234567890"
-};
+## 5. Colecciones y migración inicial
+
+La aplicación usa estas rutas:
+
+```text
+inventory/{productId}       Un documento por producto (SKU como ID; SKU con “/” codificado)
+system/inventorySeed        Marcador de inicialización, creado una sola vez
+users/{firebaseAuthUid}     Perfil/rol asignado por el administrador
 ```
 
-**¡Copia TODOS estos valores!**
+`inventory` conserva la colección que ya usaba esta app. Si está vacía y no tiene marcador, una transacción Firestore carga el catálogo inicial empaquetado una única vez. Si ya contiene documentos, no los reemplaza ni vuelve a subir los datos estáticos. Después de esa inicialización, los datos editables se leen de Firestore.
 
----
+Cada producto contiene SKU, descripción, vehículos, categoría, cantidades, precio, indicadores y fechas `createdAt`/`updatedAt` de Firestore. Las categorías del filtro se derivan de los productos sincronizados.
 
-### **Paso 5: Actualizar tu Código**
+## 6. Prueba en dos dispositivos
 
-1. Abre el archivo `src/firebase.ts` en tu editor
-2. Reemplaza los valores placeholder con tus credenciales reales:
+1. Configura las variables de entorno y publica las reglas.
+2. Crea dos usuarios/cuentas (o usa la misma cuenta en dos sesiones) y asigna un rol `admin` o `employee` en Firestore.
+3. Abre la aplicación en dos navegadores o computadores e inicia sesión.
+4. Cambia en el primer equipo el precio o una cantidad de un SKU.
+5. Espera el estado “Sincronizado en tiempo real”: el segundo cliente debe reflejar el cambio automáticamente, sin recargar.
+6. Confirma también que `viewer` puede leer pero no guardar y que desconectar la red muestra estado de conexión/error sin confirmar escrituras pendientes.
 
-```typescript
-const firebaseConfig = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // ← Tu API Key
-  authDomain: "gvautopartes-inventario.firebaseapp.com", // ← Tu Auth Domain
-  projectId: "gvautopartes-inventario", // ← Tu Project ID
-  storageBucket: "gvautopartes-inventario.appspot.com", // ← Tu Storage Bucket
-  messagingSenderId: "123456789012", // ← Tu Messaging Sender ID
-  appId: "1:123456789012:web:abcdef1234567890" // ← Tu App ID
-};
-```
+## 7. Límites del alcance actual
 
-3. Guarda el archivo
+La app registra el conteo actual de cantidades, no un libro de movimientos de entradas/salidas. Por eso no se crea una colección `inventory_movements`: no hay formularios existentes de movimientos que migrar. Las copias Excel/JSON se generan o descargan localmente como exportaciones, pero no son la fuente de datos. No se usa `localStorage` ni IndexedDB como base de datos. No se habilita persistencia offline durable; la interfaz muestra cambios pendientes y solo los marca guardados cuando Firebase los confirma.
 
----
+Si aparece `permission-denied`, verifica que el usuario haya iniciado sesión, que exista `users/{UID}` con rol válido y que las reglas publicadas sean las del archivo `firestore.rules`. Si falta configuración, revisa los nombres `VITE_FIREBASE_*` en `.env.local` o en Vercel y vuelve a iniciar/desplegar la app.
 
-### **Paso 6: Subir Cambios a GitHub**
-
-```bash
-# Agregar cambios
-git add .
-
-# Hacer commit
-git commit -m "Conectar aplicación con Firebase Firestore"
-
-# Subir a GitHub
-git push origin main
-```
-
----
-
-### **Paso 7: Desplegar en Vercel**
-
-Vercel detectará automáticamente los cambios y desplegará la nueva versión con Firebase integrado.
-
----
-
-## 🎯 ¿Cómo Funciona Ahora?
-
-### **Sincronización en Tiempo Real:**
-
-✅ **Todos los usuarios ven los mismos datos**
-- Cuando alguien edita un producto, todos lo ven inmediatamente
-- No es necesario recargar la página
-- Los cambios se guardan automáticamente en la nube
-
-✅ **Estado de sincronización visible:**
-- 🔄 **"Sincronizando con Firebase..."** - Conectando con la base de datos
-- ⏳ **"Guardando en la nube..."** - Guardando cambios
-- ✅ **"Sincronizado en tiempo real"** - Todo actualizado
-- ❌ **"Error de conexión"** - Problema de conexión
-
-✅ **Primera vez que se carga:**
-- La app detecta si Firestore está vacío
-- Si está vacío, sube automáticamente los 275 productos iniciales
-- Si ya tiene datos, los descarga y los muestra
-
----
-
-## 🔐 Seguridad (Recomendado para Producción)
-
-### **Opción 1: Reglas de Firestore Básicas**
-
-Para permitir que solo usuarios autenticados editen:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /inventory/{document=**} {
-      allow read: if true; // Todos pueden leer
-      allow write: if request.auth != null; // Solo autenticados pueden escribir
-    }
-  }
-}
-```
-
-### **Opción 2: Autenticación de Firebase**
-
-1. En Firebase Console, ve a **"Authentication"**
-2. Click en **"Comenzar"**
-3. Habilita los métodos de autenticación que prefieras:
-   - Email/Password
-   - Google
-   - etc.
-
-4. Agrega autenticación a tu app (requiere cambios adicionales en el código)
-
----
-
-## 📊 Estructura de Datos en Firestore
-
-Tu base de datos tendrá:
-
-```
-Firestore Database
-└── inventory (colección)
-    ├── R42XLS-G (documento)
-    │   ├── sku: "R42XLS-G"
-    │   ├── description: "Bujía Punta Carbón"
-    │   ├── vehicles: "CHEVROLET CORSA..."
-    │   ├── qtyPdf: 16
-    │   ├── qtyReceived: 16
-    │   ├── unitPrice: 1.35
-    │   └── ...
-    ├── 41-602 (documento)
-    │   └── ...
-    └── ... (275 documentos en total)
-```
-
----
-
-## 🚀 Características de Firebase
-
-✅ **Tiempo Real:** Los cambios se reflejan instantáneamente para todos los usuarios  
-✅ **Escalable:** Puede manejar miles de usuarios simultáneos  
-✅ **Confiable:** Datos respaldados en la nube de Google  
-✅ **Gratuito:** El plan gratuito (Spark) es suficiente para tu caso de uso  
-✅ **Multi-dispositivo:** Funciona en cualquier navegador o dispositivo  
-
----
-
-## 💰 Límites del Plan Gratuito de Firebase
-
-- **Almacenamiento:** 1 GB de datos
-- **Lecturas:** 50,000 por día
-- **Escrituras:** 20,000 por día
-- **Eliminaciones:** 20,000 por día
-
-**Para tu inventario de 275 productos, estos límites son más que suficientes.**
-
----
-
-## 🛠️ Solución de Problemas
-
-### **Problema: "Error de conexión"**
-
-**Solución:**
-1. Verifica que las credenciales en `src/firebase.ts` sean correctas
 2. Asegúrate de que Firestore esté habilitado en Firebase Console
 3. Revisa las reglas de seguridad de Firestore
 
