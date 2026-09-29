@@ -3,7 +3,7 @@ import { inventoryData, type InventoryItem, type ItemStatus } from './data/inven
 import { unitPrices } from './data/prices';
 import ExcelJS from 'exceljs';
 import { db } from './firebase';
-import { collection, onSnapshot, doc, setDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, writeBatch } from 'firebase/firestore';
 
 interface TrackedItem extends InventoryItem {
   id: string;
@@ -32,29 +32,19 @@ const allItems: TrackedItem[] = inventoryData.flatMap(category =>
   }))
 );
 
-// Función para inicializar datos en Firestore si está vacío
-async function initializeFirestoreData() {
-  try {
-    const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
-    if (querySnapshot.empty) {
-      console.log('Inicializando datos en Firestore...');
-      const batch = writeBatch(db);
-      allItems.forEach(item => {
-        const docRef = doc(db, COLLECTION_NAME, item.sku);
-        batch.set(docRef, item);
-      });
-      await batch.commit();
-      console.log('Datos inicializados correctamente');
-    }
-  } catch (error) {
-    console.error('Error inicializando datos:', error);
-  }
+function getFirestoreDocumentId(sku: string): string {
+  const normalizedSku = sku.trim();
+  if (!normalizedSku) throw new Error('El SKU no puede estar vacío.');
+
+  return normalizedSku.includes('/')
+    ? `sku_${encodeURIComponent(normalizedSku)}`
+    : normalizedSku;
 }
 
 // Función para guardar un item en Firestore
 async function saveItemToFirestore(item: TrackedItem) {
   try {
-    const docRef = doc(db, COLLECTION_NAME, item.sku);
+    const docRef = doc(db, COLLECTION_NAME, getFirestoreDocumentId(item.sku));
     await setDoc(docRef, item);
     return true;
   } catch (error) {
@@ -68,7 +58,7 @@ async function saveAllItemsToFirestore(items: TrackedItem[]) {
   try {
     const batch = writeBatch(db);
     items.forEach(item => {
-      const docRef = doc(db, COLLECTION_NAME, item.sku);
+      const docRef = doc(db, COLLECTION_NAME, getFirestoreDocumentId(item.sku));
       batch.set(docRef, item);
     });
     await batch.commit();
@@ -82,7 +72,7 @@ async function saveAllItemsToFirestore(items: TrackedItem[]) {
 // Función para eliminar un item de Firestore
 async function deleteItemFromFirestore(sku: string) {
   try {
-    const docRef = doc(db, COLLECTION_NAME, sku);
+    const docRef = doc(db, COLLECTION_NAME, getFirestoreDocumentId(sku));
     await setDoc(docRef, { deleted: true }, { merge: true });
     return true;
   } catch (error) {
@@ -135,6 +125,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'syncing'>('syncing');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const firestoreReadyRef = useRef(false);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
@@ -146,14 +137,12 @@ export default function App() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
-  // Inicializar Firestore y configurar listener en tiempo real
+  // Configurar listener en tiempo real para sincronización automática
   useEffect(() => {
-    initializeFirestoreData();
-    
-    // Listener en tiempo real para sincronización automática
     const unsubscribe = onSnapshot(
       collection(db, COLLECTION_NAME),
       (snapshot) => {
+        firestoreReadyRef.current = true;
         const firestoreItems: TrackedItem[] = [];
         snapshot.forEach(doc => {
           const data = doc.data();
@@ -162,32 +151,34 @@ export default function App() {
           }
         });
         
-        // Si Firestore está vacío, usar datos locales
         if (firestoreItems.length === 0) {
           setItems(allItems);
-          saveAllItemsToFirestore(allItems);
+          setSaveStatus('saving');
         } else {
           setItems(firestoreItems);
+          setSaveStatus('saved');
         }
-        
-        setSaveStatus('saved');
       },
       (error) => {
+        firestoreReadyRef.current = false;
         console.error('Error en listener de Firestore:', error);
         setSaveStatus('error');
-        // Fallback a datos locales si hay error
         setItems(allItems);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      firestoreReadyRef.current = false;
+      unsubscribe();
+    };
   }, []);
 
   // Guardar cambios en Firestore cuando items cambia
   useEffect(() => {
-    if (items.length > 0) {
+    if (items.length > 0 && firestoreReadyRef.current) {
       setSaveStatus('saving');
       const timer = setTimeout(() => {
+        if (!firestoreReadyRef.current) return;
         saveAllItemsToFirestore(items).then(success => {
           setSaveStatus(success ? 'saved' : 'error');
         });
