@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
 import ExcelJS from 'exceljs';
+import { db } from './firebase';
+import { collection, onSnapshot, doc, setDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 interface TrackedItem extends InventoryItem {
   id: string;
@@ -14,7 +16,7 @@ interface TrackedItem extends InventoryItem {
   unitPrice: number;
 }
 
-const STORAGE_KEY = 'gvautopartes_inventory_data_v5';
+const COLLECTION_NAME = 'inventory';
 
 const allItems: TrackedItem[] = inventoryData.flatMap(category => 
   category.items.map((item, idx) => ({
@@ -30,45 +32,61 @@ const allItems: TrackedItem[] = inventoryData.flatMap(category =>
   }))
 );
 
-function loadItems(): TrackedItem[] {
+// Función para inicializar datos en Firestore si está vacío
+async function initializeFirestoreData() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const savedItems: TrackedItem[] = JSON.parse(saved);
-      const savedMap = new Map(savedItems.map(item => [item.sku, item]));
-      
-      const syncedItems = allItems.map(originalItem => {
-        const savedItem = savedMap.get(originalItem.sku);
-        if (savedItem) {
-          return {
-            ...originalItem,
-            qtyReceived: savedItem.qtyReceived,
-            unitPrice: savedItem.unitPrice !== undefined ? savedItem.unitPrice : originalItem.unitPrice,
-            inPdf: savedItem.inPdf !== undefined ? savedItem.inPdf : originalItem.inPdf,
-            inExcel: savedItem.inExcel !== undefined ? savedItem.inExcel : originalItem.inExcel,
-            inPhysical: savedItem.inPhysical !== undefined ? savedItem.inPhysical : originalItem.inPhysical,
-          };
-        }
-        return originalItem;
+    const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
+    if (querySnapshot.empty) {
+      console.log('Inicializando datos en Firestore...');
+      const batch = writeBatch(db);
+      allItems.forEach(item => {
+        const docRef = doc(db, COLLECTION_NAME, item.sku);
+        batch.set(docRef, item);
       });
-      
-      const originalSkus = new Set(allItems.map(item => item.sku));
-      const customItems = savedItems.filter(item => !originalSkus.has(item.sku));
-      
-      return [...syncedItems, ...customItems];
+      await batch.commit();
+      console.log('Datos inicializados correctamente');
     }
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error('Error inicializando datos:', error);
   }
-  return allItems;
 }
 
-function saveItems(items: TrackedItem[]) {
+// Función para guardar un item en Firestore
+async function saveItemToFirestore(item: TrackedItem) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    const docRef = doc(db, COLLECTION_NAME, item.sku);
+    await setDoc(docRef, item);
     return true;
   } catch (error) {
-    console.error('Error saving data:', error);
+    console.error('Error guardando item:', error);
+    return false;
+  }
+}
+
+// Función para guardar todos los items en Firestore
+async function saveAllItemsToFirestore(items: TrackedItem[]) {
+  try {
+    const batch = writeBatch(db);
+    items.forEach(item => {
+      const docRef = doc(db, COLLECTION_NAME, item.sku);
+      batch.set(docRef, item);
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error('Error guardando items:', error);
+    return false;
+  }
+}
+
+// Función para eliminar un item de Firestore
+async function deleteItemFromFirestore(sku: string) {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, sku);
+    await setDoc(docRef, { deleted: true }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Error eliminando item:', error);
     return false;
   }
 }
@@ -111,11 +129,11 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
 }
 
 export default function App() {
-  const [items, setItems] = useState<TrackedItem[]>(loadItems);
+  const [items, setItems] = useState<TrackedItem[]>([]);
   const [currentFilter, setCurrentFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'syncing'>('syncing');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
@@ -128,13 +146,54 @@ export default function App() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
+  // Inicializar Firestore y configurar listener en tiempo real
   useEffect(() => {
-    setSaveStatus('saving');
-    const timer = setTimeout(() => {
-      const success = saveItems(items);
-      setSaveStatus(success ? 'saved' : 'error');
-    }, 300);
-    return () => clearTimeout(timer);
+    initializeFirestoreData();
+    
+    // Listener en tiempo real para sincronización automática
+    const unsubscribe = onSnapshot(
+      collection(db, COLLECTION_NAME),
+      (snapshot) => {
+        const firestoreItems: TrackedItem[] = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (!data.deleted) {
+            firestoreItems.push(data as TrackedItem);
+          }
+        });
+        
+        // Si Firestore está vacío, usar datos locales
+        if (firestoreItems.length === 0) {
+          setItems(allItems);
+          saveAllItemsToFirestore(allItems);
+        } else {
+          setItems(firestoreItems);
+        }
+        
+        setSaveStatus('saved');
+      },
+      (error) => {
+        console.error('Error en listener de Firestore:', error);
+        setSaveStatus('error');
+        // Fallback a datos locales si hay error
+        setItems(allItems);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Guardar cambios en Firestore cuando items cambia
+  useEffect(() => {
+    if (items.length > 0) {
+      setSaveStatus('saving');
+      const timer = setTimeout(() => {
+        saveAllItemsToFirestore(items).then(success => {
+          setSaveStatus(success ? 'saved' : 'error');
+        });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, [items]);
 
   const filteredItems = useMemo(() => {
@@ -164,16 +223,17 @@ export default function App() {
     setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
   };
 
-  const resetData = () => {
+  const resetData = async () => {
     if (window.confirm('¿Resetear todos los datos?')) {
       setItems(allItems);
-      saveItems(allItems);
+      await saveAllItemsToFirestore(allItems);
       setSaveStatus('saved');
     }
   };
 
-  const handleDeleteItem = (id: string, sku: string) => {
+  const handleDeleteItem = async (id: string, sku: string) => {
     if (window.confirm(`¿Eliminar "${sku}"?`)) {
+      await deleteItemFromFirestore(sku);
       setItems(prev => prev.filter(item => item.id !== id));
     }
   };
@@ -183,18 +243,19 @@ export default function App() {
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingItem) return;
     if (!editingItem.sku.trim() || !editingItem.description.trim()) {
       alert('❌ SKU y descripción son obligatorios');
       return;
     }
+    await saveItemToFirestore(editingItem);
     setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
     setShowEditModal(false);
     setEditingItem(null);
   };
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.sku.trim() || !newItem.description.trim()) {
       alert('❌ SKU y descripción son obligatorios');
       return;
@@ -222,6 +283,7 @@ export default function App() {
       unitPrice: 0
     };
     
+    await saveItemToFirestore(newItemData);
     setItems(prev => [...prev, newItemData]);
     setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
@@ -357,16 +419,16 @@ export default function App() {
     link.click();
   };
 
-  const importJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
         if (Array.isArray(data) && data.every((item: any) => 'sku' in item)) {
+          await saveAllItemsToFirestore(data);
           setItems(data);
-          saveItems(data);
           alert('✅ Respaldo cargado');
         } else {
           alert('❌ Archivo inválido');
@@ -400,7 +462,7 @@ export default function App() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">📦 GvAutoPartes - Control de Inventario</h1>
-            <p className="text-gray-500 text-sm mt-1">Edita las cantidades y precios. El estado se calcula automáticamente.</p>
+            <p className="text-gray-500 text-sm mt-1">Edita las cantidades y precios. Sincronización en tiempo real con Firebase.</p>
             <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 25/09/2026 | Proveedor: Guzimport, C.A.</p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -409,14 +471,14 @@ export default function App() {
               <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
               <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
               <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
-              <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
               <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
             </div>
             <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
             <div className="text-xs">
-              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando...</span>}
-              {saveStatus === 'saved' && <span className="text-green-600">✅ Guardado automáticamente</span>}
-              {saveStatus === 'error' && <span className="text-red-600">❌ Error al guardar</span>}
+              {saveStatus === 'syncing' && <span className="text-blue-600">🔄 Sincronizando con Firebase...</span>}
+              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando en la nube...</span>}
+              {saveStatus === 'saved' && <span className="text-green-600">✅ Sincronizado en tiempo real</span>}
+              {saveStatus === 'error' && <span className="text-red-600">❌ Error de conexión</span>}
             </div>
           </div>
         </div>
