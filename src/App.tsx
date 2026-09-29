@@ -165,6 +165,7 @@ export default function App() {
         // Si Firestore está vacío, usar datos locales
         if (firestoreItems.length === 0) {
           setItems(allItems);
+          // Guardar datos iniciales en Firestore
           saveAllItemsToFirestore(allItems);
         } else {
           setItems(firestoreItems);
@@ -183,15 +184,16 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Guardar cambios en Firestore cuando items cambia
+  // Guardar cambios en Firestore cuando items cambia (con debounce)
   useEffect(() => {
-    if (items.length > 0) {
+    // Solo guardar si hay cambios reales y no es la carga inicial
+    if (items.length > 0 && items !== allItems) {
       setSaveStatus('saving');
       const timer = setTimeout(() => {
         saveAllItemsToFirestore(items).then(success => {
           setSaveStatus(success ? 'saved' : 'error');
         });
-      }, 500);
+      }, 1000); // Aumentado a 1 segundo para evitar escrituras frecuentes
       return () => clearTimeout(timer);
     }
   }, [items]);
