@@ -259,7 +259,6 @@ export const unitPrices: Record<string, number> = {
   "17801-21030-D": 2.83,
   "17801-21050-D": 2.26,
   "7701045724-W": 3.05,
-  "28113-22001-W": 2.40,
   
   // Filtros de Gasolina
   "2068B-W": 1.35,

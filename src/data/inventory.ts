@@ -320,7 +320,6 @@ export const inventoryData: Category[] = [
       { sku: "17801-21030-D", description: "Filtro Aire Motor", vehicles: "TOYOTA YARIS SOL 1.3 00-05", qtyPdf: 1, qtyPhysical: 0, status: "missing", category: "Filtros de Aire" },
       { sku: "17801-21050-D", description: "Filtro Aire Motor", vehicles: "TOYOTA YARIS SPORT BELTA 1.5 06-12 / TOYOTA COROLLA 1.8 09-14", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
       { sku: "7701045724-W", description: "Filtro Aire Motor", vehicles: "RENAULT CLIO / RENAULT SYMBOL / RENAULT MEGANE / RENAULT KANGOO (CÓDIGO CORREGIDO, FALTABA EL 4)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
-      { sku: "28113-22001-W", description: "Filtro Aire Motor", vehicles: "HYUNDAI ACCENT 1.3", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
     ]
   },
   {
