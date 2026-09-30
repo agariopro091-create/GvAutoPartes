@@ -65,6 +65,16 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState<TrackedItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
   const [saleCustomer, setSaleCustomer] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItem, setNewItem] = useState({
+    sku: '',
+    description: '',
+    vehicles: '',
+    category: '',
+    qtyInvoice: 0,
+    qtyReceived: null as number | null,
+    unitPrice: 0
+  });
 
   useEffect(() => {
     const savedItems = localStorage.getItem('gvautopartes_items_v2');
@@ -166,49 +176,206 @@ export default function App() {
     ));
   };
 
+  const handleAddItem = () => {
+    if (!newItem.sku.trim() || !newItem.description.trim() || !newItem.category.trim()) {
+      alert('❌ SKU, descripción y categoría son obligatorios');
+      return;
+    }
+
+    if (items.some(item => item.sku.toLowerCase() === newItem.sku.trim().toLowerCase())) {
+      alert('❌ Ya existe un producto con ese SKU');
+      return;
+    }
+
+    const categoryId = inventoryData.find(cat => cat.name === newItem.category)?.id || 999;
+
+    const newItemData: TrackedItem = {
+      id: `custom-${Date.now()}`,
+      sku: newItem.sku.trim(),
+      description: newItem.description.trim(),
+      vehicles: newItem.vehicles.trim(),
+      category: newItem.category.trim(),
+      categoryId: categoryId,
+      qtyPdf: newItem.qtyInvoice,
+      qtyPhysical: newItem.qtyReceived,
+      status: calculateStatus(newItem.qtyInvoice, newItem.qtyReceived),
+      inInvoice: true,
+      inExcel: true,
+      inPhysical: false,
+      qtyInvoice: newItem.qtyInvoice,
+      qtyReceived: newItem.qtyReceived,
+      unitPrice: newItem.unitPrice,
+      stock: newItem.qtyReceived || 0
+    };
+
+    setItems(prev => [...prev, newItemData]);
+    setNewItem({
+      sku: '',
+      description: '',
+      vehicles: '',
+      category: '',
+      qtyInvoice: 0,
+      qtyReceived: null,
+      unitPrice: 0
+    });
+    setShowAddModal(false);
+    alert('✅ Producto agregado exitosamente');
+  };
+
   const exportToExcel = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Inventario');
+      workbook.creator = 'GvAutoPartes';
+      workbook.created = new Date();
+      
+      const worksheet = workbook.addWorksheet('Inventario', {
+        properties: { defaultRowHeight: 20 }
+      });
 
+      // Configuración de columnas
       worksheet.columns = [
-        { header: 'SKU', key: 'sku', width: 20 },
-        { header: 'Descripción', key: 'description', width: 40 },
-        { header: 'Vehículos', key: 'vehicles', width: 40 },
+        { header: 'N°', key: 'num', width: 6 },
+        { header: 'Indicadores', key: 'indicators', width: 14 },
         { header: 'Categoría', key: 'category', width: 20 },
+        { header: 'Código SKU', key: 'sku', width: 18 },
+        { header: 'Descripción', key: 'description', width: 35 },
+        { header: 'Vehículos Compatibles', key: 'vehicles', width: 40 },
         { header: 'Factura/Despacho', key: 'qtyInvoice', width: 15 },
         { header: 'Recibido Físico', key: 'qtyReceived', width: 15 },
-        { header: 'Stock Actual', key: 'stock', width: 15 },
-        { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
-        { header: 'Estado', key: 'status', width: 15 }
+        { header: 'Stock Actual', key: 'stock', width: 12 },
+        { header: 'Estado', key: 'status', width: 14 },
+        { header: 'Precio Unitario', key: 'unitPrice', width: 14 },
+        { header: 'Precio Venta', key: 'salePrice', width: 14 }
       ];
 
-      items.forEach(item => {
+      // === ENCABEZADO DEL REPORTE ===
+      const now = new Date();
+      const fecha = now.toLocaleDateString('es-VE');
+      const hora = now.toLocaleTimeString('es-VE');
+      
+      const totalItems = items.length;
+      const completados = items.filter(i => calculateStatus(i.qtyInvoice, i.qtyReceived) === 'ok').length;
+      const faltantes = items.filter(i => calculateStatus(i.qtyInvoice, i.qtyReceived) === 'missing').length;
+      const incompletos = items.filter(i => calculateStatus(i.qtyInvoice, i.qtyReceived) === 'partial').length;
+      const extra = items.filter(i => calculateStatus(i.qtyInvoice, i.qtyReceived) === 'extra').length;
+      const pendientes = items.filter(i => calculateStatus(i.qtyInvoice, i.qtyReceived) === 'pending').length;
+
+      // Fila 1: Nombre de la empresa
+      worksheet.mergeCells('A1:L1');
+      const cellEmpresa = worksheet.getCell('A1');
+      cellEmpresa.value = 'GvAutoPartes';
+      cellEmpresa.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FF1E3A8A' } };
+      cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 30;
+
+      // Fila 2: Título del reporte
+      worksheet.mergeCells('A2:L2');
+      const cellTitulo = worksheet.getCell('A2');
+      cellTitulo.value = 'Inventario General - Respaldo de Emergencia';
+      cellTitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
+      cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).height = 25;
+
+      // Fila 3: Metadatos
+      worksheet.mergeCells('A3:F3');
+      worksheet.getCell('A3').value = `Fecha: ${fecha} ${hora}`;
+      worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
+      worksheet.getCell('A3').alignment = { horizontal: 'left' };
+
+      worksheet.mergeCells('G3:L3');
+      worksheet.getCell('G3').value = `Total: ${totalItems} productos`;
+      worksheet.getCell('G3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+      worksheet.getCell('G3').alignment = { horizontal: 'right' };
+      worksheet.getRow(3).height = 20;
+
+      // Fila 4: Resumen
+      worksheet.mergeCells('A4:L4');
+      const cellResumen = worksheet.getCell('A4');
+      cellResumen.value = `✅ Completos: ${completados} | ❌ Faltantes: ${faltantes} | ⚠️ Incompletos: ${incompletos} | ⭐ Extra: ${extra} | ⏳ Pendientes: ${pendientes}`;
+      cellResumen.font = { name: 'Arial', size: 9, color: { argb: 'FF4B5563' } };
+      cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
+      cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+      worksheet.getRow(4).height = 22;
+
+      // Fila 5: Espacio
+      worksheet.getRow(5).height = 8;
+
+      // === TABLA DE DATOS ===
+      const headerRowNum = 6;
+      const headerRow = worksheet.getRow(headerRowNum);
+      
+      // Estilo del encabezado de la tabla
+      headerRow.eachCell((cell) => {
+        cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+        };
+      });
+      headerRow.height = 25;
+
+      // Agregar datos
+      items.forEach((item, index) => {
+        let indicators = '';
+        if (item.inInvoice) indicators += '🔴 Factura ';
+        if (item.inExcel) indicators += '🟢 Excel ';
+        if (item.inPhysical) indicators += '🟣 Físico';
+
         const status = calculateStatus(item.qtyInvoice, item.qtyReceived);
-        worksheet.addRow({
+        const statusText: Record<ItemStatus, string> = {
+          'ok': '✅ Completo', 'missing': '❌ No Vino', 'partial': '⚠️ Faltan', 'extra': '⭐ Extra', 'pending': '⏳ Pendiente'
+        };
+
+        const row = worksheet.addRow({
+          num: index + 1,
+          indicators: indicators,
+          category: item.category,
           sku: item.sku,
           description: item.description,
           vehicles: item.vehicles,
-          category: item.category,
           qtyInvoice: item.qtyInvoice,
-          qtyReceived: item.qtyReceived || 0,
+          qtyReceived: item.qtyReceived === null ? 0 : item.qtyReceived,
           stock: item.stock,
+          status: statusText[status],
           unitPrice: item.unitPrice,
-          status: status
+          salePrice: ''
+        });
+
+        // Estilo de las filas (efecto cebra)
+        const isEven = index % 2 === 0;
+        row.eachCell((cell, colNumber) => {
+          cell.font = { name: 'Arial', size: 10 };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF3F4F6' } };
+          if (colNumber === 11) {
+            cell.numFmt = '$#,##0.00';
+            cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' } };
+          }
+          if (colNumber === 12) {
+            cell.numFmt = '$#,##0.00';
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E6' } };
+          }
         });
       });
 
+      worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
+      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + items.length, column: 12 } };
+
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Inventario_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Inventario_GvAutoPartes_${fecha.replace(/\//g, '-')}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (error) {
-      console.error('Error exporting:', error);
-      alert('Error al exportar');
+      console.error('Error al exportar:', error);
+      alert('❌ Error al exportar');
     }
   };
 
@@ -259,6 +426,12 @@ export default function App() {
                 }`}
               >
                 ⚠️ Stock Bajo
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors"
+              >
+                ➕ Agregar
               </button>
             </div>
           </div>
@@ -586,6 +759,129 @@ export default function App() {
                     setSaleCustomer('');
                   }}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Agregar Producto */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">➕ Agregar Nuevo Producto</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Código SKU *</label>
+                <input
+                  type="text"
+                  value={newItem.sku}
+                  onChange={(e) => setNewItem({...newItem, sku: e.target.value})}
+                  placeholder="Ej: FLAM-001"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
+                <input
+                  type="text"
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                  placeholder="Ej: Filtro de Aceite Flamingo"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Vehículos Compatibles</label>
+                <textarea
+                  value={newItem.vehicles}
+                  onChange={(e) => setNewItem({...newItem, vehicles: e.target.value})}
+                  placeholder="Ej: CHEVROLET AVEO, TOYOTA COROLLA"
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
+                <select
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({...newItem, category: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Seleccionar categoría...</option>
+                  {inventoryData.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Factura/Despacho</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyInvoice}
+                    onChange={(e) => setNewItem({...newItem, qtyInvoice: parseInt(e.target.value) || 0})}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Recibido Físico</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyReceived === null ? '' : newItem.qtyReceived}
+                    onChange={(e) => setNewItem({...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value)})}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio Unitario ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newItem.unitPrice}
+                  onChange={(e) => setNewItem({...newItem, unitPrice: parseFloat(e.target.value) || 0})}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  onClick={handleAddItem}
+                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+                >
+                  ✅ Agregar Producto
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewItem({
+                      sku: '',
+                      description: '',
+                      vehicles: '',
+                      category: '',
+                      qtyInvoice: 0,
+                      qtyReceived: null,
+                      unitPrice: 0
+                    });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
                 >
                   ❌ Cancelar
                 </button>
