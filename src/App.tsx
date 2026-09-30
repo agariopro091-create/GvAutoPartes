@@ -1145,9 +1145,7 @@ export default function App() {
           </p>
         )}
 
-        {currentView === 'sales' && (() => {
-          const months = Object.keys(monthlySales).sort().reverse();
-          return (
+        {currentView === 'sales' && (
           <>
             {lowStockItems.length > 0 && (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
@@ -1169,9 +1167,9 @@ export default function App() {
               </div>
             )}
 
-            {Object.keys(monthlySales).length > 0 ? (
+            {sales.length > 0 ? (
               <div className="space-y-6">
-                {months.map(month => {
+                {Object.keys(monthlySales).sort().reverse().map(month => {
                   const monthSales = monthlySales[month];
                   const monthTotal = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
                   const monthDate = new Date(month + '-01');
@@ -1247,12 +1245,11 @@ export default function App() {
               <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                 <div className="text-6xl mb-4">💰</div>
                 <h3 className="text-xl font-semibold text-gray-600 mb-2">No hay ventas registradas</h3>
-                <p className="text-gray-500">Ve al inventario y haz click en "Vender" para registrar tu primera venta</p>
+                <p className="text-gray-500">Ve al inventario y haz click en 💰 para registrar tu primera venta</p>
               </div>
             )}
           </>
-          );
-        })()}
+        )}
 
         <div className="mt-6 pt-4 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-400"><strong className="text-gray-600">GvAutoPartes</strong> | Proveedor: Guzimport, C.A.</p>
