@@ -21,6 +21,7 @@ interface Sale {
   description: string;
   quantity: number;
   unitPrice: number;
+  salePrice: number;
   totalPrice: number;
   date: string;
   customer: string;
@@ -255,6 +256,135 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// Componente Modal para Editar Venta
+function EditSaleModal({ 
+  sale, 
+  onSave, 
+  onClose 
+}: { 
+  sale: Sale; 
+  onSave: (updatedSale: Sale) => void;
+  onClose: () => void;
+}) {
+  const [quantity, setQuantity] = useState(sale.quantity);
+  const [unitPrice, setUnitPrice] = useState(sale.unitPrice);
+  const [salePrice, setSalePrice] = useState(sale.salePrice);
+  const [customer, setCustomer] = useState(sale.customer);
+
+  const handleSave = () => {
+    if (quantity <= 0) {
+      alert('❌ La cantidad debe ser mayor a 0');
+      return;
+    }
+    if (salePrice <= 0) {
+      alert('❌ El precio de venta debe ser mayor a 0');
+      return;
+    }
+
+    const updatedSale: Sale = {
+      ...sale,
+      quantity,
+      unitPrice,
+      salePrice,
+      totalPrice: quantity * salePrice,
+      customer: customer || 'Cliente general'
+    };
+
+    onSave(updatedSale);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
+          <h2 className="text-xl font-bold">✏️ Editar Venta</h2>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="font-mono text-sm text-blue-700 font-bold">{sale.sku}</div>
+            <div className="text-gray-800 mt-1">{sale.description}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              Fecha original: {new Date(sale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+            <input
+              type="text"
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Precio Ref. ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Precio Venta ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={salePrice}
+                onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-2 border-2 border-green-400 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none font-bold text-green-700"
+              />
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-gray-700">Total Actualizado:</span>
+              <span className="text-2xl font-bold text-blue-700">${(quantity * salePrice).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+            >
+              💾 Guardar Cambios
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
+            >
+              ❌ Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
   const [items, setItems] = useState<TrackedItem[]>(loadItems);
@@ -279,6 +409,11 @@ export default function App() {
   const [saleQuantity, setSaleQuantity] = useState(1);
   const [saleCustomer, setSaleCustomer] = useState('');
   const [saleUnitPrice, setSaleUnitPrice] = useState(0);
+  const [salePrice, setSalePrice] = useState(0);
+  
+  // Estados para editar/cancelar ventas
+  const [showEditSaleModal, setShowEditSaleModal] = useState(false);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
@@ -316,6 +451,7 @@ export default function App() {
     setSaleQuantity(1);
     setSaleCustomer('');
     setSaleUnitPrice(item.unitPrice);
+    setSalePrice(item.unitPrice);
     setShowSaleModal(true);
   };
 
@@ -343,7 +479,8 @@ export default function App() {
       description: selectedItemForSale.description,
       quantity: saleQuantity,
       unitPrice: saleUnitPrice,
-      totalPrice: saleQuantity * saleUnitPrice,
+      salePrice: salePrice,
+      totalPrice: saleQuantity * salePrice,
       date: new Date().toISOString(),
       customer: saleCustomer || 'Cliente general'
     };
@@ -353,7 +490,30 @@ export default function App() {
     setSelectedItemForSale(null);
     setSaleQuantity(1);
     setSaleCustomer('');
+    setSalePrice(0);
     alert('✅ Venta registrada exitosamente');
+  };
+
+  // Función para editar una venta existente
+  const handleEditSale = (sale: Sale) => {
+    setEditingSale(sale);
+    setShowEditSaleModal(true);
+  };
+
+  // Función para guardar cambios de una venta editada
+  const handleSaveEditedSale = (updatedSale: Sale) => {
+    setSales(prev => prev.map(s => s.id === updatedSale.id ? updatedSale : s));
+    setShowEditSaleModal(false);
+    setEditingSale(null);
+    alert('✅ Venta actualizada exitosamente');
+  };
+
+  // Función para cancelar/eliminar una venta (devuelve el stock)
+  const handleCancelSale = (saleId: string) => {
+    if (window.confirm('¿Estás seguro de cancelar esta venta? El stock será devuelto.')) {
+      setSales(prev => prev.filter(s => s.id !== saleId));
+      alert('✅ Venta cancelada y stock devuelto');
+    }
   };
 
   const monthlySales = useMemo(() => {
@@ -368,6 +528,10 @@ export default function App() {
 
   const totalSalesAmount = useMemo(() => {
     return sales.reduce((sum, sale) => sum + sale.totalPrice, 0);
+  }, [sales]);
+
+  const totalProfit = useMemo(() => {
+    return sales.reduce((sum, sale) => sum + ((sale.salePrice - sale.unitPrice) * sale.quantity), 0);
   }, [sales]);
 
   const lowStockItems = useMemo(() => {
@@ -408,25 +572,52 @@ export default function App() {
       // Hoja 2: Detalle de Ventas
       const detailSheet = workbook.addWorksheet('Detalle de Ventas');
       detailSheet.columns = [
-        { header: 'Fecha', key: 'date', width: 18 },
+        { header: 'Fecha', key: 'date', width: 15 },
         { header: 'Cliente', key: 'customer', width: 25 },
         { header: 'SKU', key: 'sku', width: 18 },
         { header: 'Descripción', key: 'description', width: 40 },
         { header: 'Cantidad', key: 'quantity', width: 12 },
-        { header: 'Precio Unit.', key: 'unitPrice', width: 14 },
-        { header: 'Total', key: 'totalPrice', width: 14 }
+        { header: 'Precio Ref.', key: 'unitPrice', width: 14 },
+        { header: 'Precio Venta', key: 'salePrice', width: 14 },
+        { header: 'Total', key: 'totalPrice', width: 14 },
+        { header: 'Ganancia', key: 'profit', width: 14 }
       ];
 
       sales.forEach(sale => {
+        const date = new Date(sale.date);
+        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+        const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
+        
         detailSheet.addRow({
-          date: new Date(sale.date).toLocaleString('es-VE'),
+          date: formattedDate,
           customer: sale.customer,
           sku: sale.sku,
           description: sale.description,
           quantity: sale.quantity,
           unitPrice: sale.unitPrice,
-          totalPrice: sale.totalPrice
+          salePrice: sale.salePrice,
+          totalPrice: sale.totalPrice,
+          profit: profit
         });
+      });
+
+      // Formato de moneda para columnas de precios
+      detailSheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          row.getCell(6).numFmt = '$#,##0.00';
+          row.getCell(7).numFmt = '$#,##0.00';
+          row.getCell(8).numFmt = '$#,##0.00';
+          row.getCell(9).numFmt = '$#,##0.00';
+          
+          // Color verde para ganancias positivas
+          const profitCell = row.getCell(9);
+          const profitValue = profitCell.value as number;
+          if (profitValue > 0) {
+            profitCell.font = { color: { argb: 'FF059669' }, bold: true };
+          } else if (profitValue < 0) {
+            profitCell.font = { color: { argb: 'FFDC2626' }, bold: true };
+          }
+        }
       });
 
       // Hoja 3: Stock Bajo
@@ -823,10 +1014,14 @@ export default function App() {
         )}
 
         {currentView === 'sales' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
             <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
               <div className="text-3xl font-bold text-green-600">${totalSalesAmount.toFixed(2)}</div>
               <div className="text-sm text-gray-600 mt-1">💰 Total Vendido</div>
+            </div>
+            <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-200">
+              <div className="text-3xl font-bold text-emerald-600">${totalProfit.toFixed(2)}</div>
+              <div className="text-sm text-gray-600 mt-1">📈 Ganancia Total</div>
             </div>
             <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
               <div className="text-3xl font-bold text-blue-600">{sales.length}</div>
@@ -995,22 +1190,43 @@ export default function App() {
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">SKU</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Producto</th>
                               <th className="py-3 px-4 text-center font-semibold text-gray-700">Cant.</th>
-                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Unit.</th>
+                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Ref.</th>
+                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Venta</th>
                               <th className="py-3 px-4 text-right font-semibold text-gray-700">Total</th>
+                              <th className="py-3 px-4 text-center font-semibold text-gray-700">Acciones</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             {monthSales.map(sale => (
                               <tr key={sale.id} className="hover:bg-gray-50">
                                 <td className="py-3 px-4 text-gray-600">
-                                  {new Date(sale.date).toLocaleDateString('es-VE')}
+                                  {new Date(sale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </td>
                                 <td className="py-3 px-4 text-gray-800 font-medium">{sale.customer}</td>
                                 <td className="py-3 px-4 font-mono text-blue-700 text-xs">{sale.sku}</td>
                                 <td className="py-3 px-4 text-gray-800">{sale.description}</td>
                                 <td className="py-3 px-4 text-center font-bold">{sale.quantity}</td>
-                                <td className="py-3 px-4 text-right text-green-700">${sale.unitPrice.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right text-gray-500 text-xs">${sale.unitPrice.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
                                 <td className="py-3 px-4 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    <button
+                                      onClick={() => handleEditSale(sale)}
+                                      className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold"
+                                      title="Editar venta"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      onClick={() => handleCancelSale(sale.id)}
+                                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold"
+                                      title="Cancelar venta"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1090,6 +1306,17 @@ export default function App() {
           </div>
         )}
 
+        {showEditSaleModal && editingSale && (
+          <EditSaleModal
+            sale={editingSale}
+            onSave={handleSaveEditedSale}
+            onClose={() => {
+              setShowEditSaleModal(false);
+              setEditingSale(null);
+            }}
+          />
+        )}
+
         {showSaleModal && selectedItemForSale && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
@@ -1130,23 +1357,51 @@ export default function App() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Precio Unitario ($)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={saleUnitPrice}
-                    onChange={(e) => setSaleUnitPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Precio Unitario <span className="text-xs text-gray-500">(Referencia)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={saleUnitPrice}
+                      onChange={(e) => setSaleUnitPrice(parseFloat(e.target.value) || 0)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                      placeholder="Precio de referencia"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Precio de Venta <span className="text-xs text-green-600">(Real)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
+                      className="w-full px-4 py-2 border-2 border-green-400 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none font-bold text-green-700"
+                      placeholder="Precio final al cliente"
+                      autoFocus
+                    />
+                  </div>
                 </div>
 
-                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-gray-700">Total de la Venta:</span>
-                    <span className="text-2xl font-bold text-green-700">${(saleQuantity * saleUnitPrice).toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-green-700">${(saleQuantity * salePrice).toFixed(2)}</span>
                   </div>
+                  {salePrice > saleUnitPrice && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-600">Ganancia estimada:</span>
+                      <span className="text-green-600 font-bold">
+                        +${((salePrice - saleUnitPrice) * saleQuantity).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
@@ -1162,6 +1417,7 @@ export default function App() {
                       setSelectedItemForSale(null);
                       setSaleQuantity(1);
                       setSaleCustomer('');
+                      setSalePrice(0);
                     }}
                     className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
                   >
