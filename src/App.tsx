@@ -158,6 +158,153 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
   );
 }
 
+// ============================================
+// SISTEMA DE AUTENTICACIÓN
+// ============================================
+const AUTH_KEY = 'gvautopartes_auth';
+const DEFAULT_PASSWORD = 'gvautopartes2026';
+
+function checkAuth(): boolean {
+  return localStorage.getItem(AUTH_KEY) === 'authenticated';
+}
+
+function login(password: string): boolean {
+  const savedPassword = localStorage.getItem('gvautopartes_password') || DEFAULT_PASSWORD;
+  if (password === savedPassword) {
+    localStorage.setItem(AUTH_KEY, 'authenticated');
+    return true;
+  }
+  return false;
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_KEY);
+}
+
+function changePassword(oldPassword: string, newPassword: string): boolean {
+  const savedPassword = localStorage.getItem('gvautopartes_password') || DEFAULT_PASSWORD;
+  if (oldPassword === savedPassword) {
+    localStorage.setItem('gvautopartes_password', newPassword);
+    return true;
+  }
+  return false;
+}
+
+// Componente de Login
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (login(password)) {
+      onLogin();
+    } else {
+      setError('Contraseña incorrecta');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPass !== confirmPass) {
+      setError('Las contraseñas nuevas no coinciden');
+      return;
+    }
+    if (newPass.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (changePassword(oldPass, newPass)) {
+      alert('✅ Contraseña cambiada exitosamente');
+      setShowChangePassword(false);
+      setOldPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setError('');
+    } else {
+      setError('La contraseña actual es incorrecta');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">GvAutoPartes</h1>
+          <p className="text-gray-500">Sistema de Inventario Privado</p>
+          <p className="text-xs text-gray-400 mt-2">Proveedor: Guzimport, C.A.</p>
+        </div>
+
+        {!showChangePassword ? (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                placeholder="Ingresa tu contraseña"
+                autoFocus
+              />
+            </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>
+            )}
+            <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors">🔓 Iniciar Sesión</button>
+            <button type="button" onClick={() => setShowChangePassword(true)} className="w-full text-gray-500 hover:text-gray-700 text-sm underline">¿Cambiar contraseña?</button>
+          </form>
+        ) : (
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Cambiar Contraseña</h2>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña Actual</label>
+              <input type="password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Nueva Contraseña</label>
+              <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required minLength={6} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Confirmar Nueva Contraseña</label>
+              <input type="password" value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required minLength={6} />
+            </div>
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>}
+            <div className="flex gap-3">
+              <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold">💾 Guardar</button>
+              <button type="button" onClick={() => { setShowChangePassword(false); setError(''); }} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 font-semibold">❌ Cancelar</button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+          <p className="text-xs text-gray-400">Documento: 80010868 | Proveedor: Guzimport, C.A.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
+  const [items, setItems] = useState<TrackedItem[]>([]);
+  const [currentFilter, setCurrentFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'syncing'>('syncing');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Si no está autenticado, mostrar pantalla de login
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
     sku: '', description: '', vehicles: '', category: '', newCategory: '',
@@ -268,6 +415,23 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
     };
 
     const unsubscribe = onSnapshot(
+      collection(db, COLLECTION_NAME),
+      (snapshot) => {
+        const firestoreItems: TrackedItem[] = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (!data.deleted) {
+            firestoreItems.push(data as TrackedItem);
+          }
+        });
+        
+        // Si Firestore está vacío, usar datos locales
+        if (firestoreItems.length === 0) {
+          setItems(allItems);
+          // Guardar datos iniciales en Firestore
+          saveAllItemsToFirestore(allItems);
+        } else {
+          setItems(firestoreItems);
       collection(database, COLLECTION_NAME),
       { includeMetadataChanges: true },
       snapshot => {
@@ -681,6 +845,9 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
               <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
               <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
               <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
+              <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
+              <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
+              <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm">🚪 Salir</button>
               <button onClick={() => setShowAddModal(true)} disabled={!isFirestoreReady} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm disabled:opacity-50">➕ Agregar</button>
               <button onClick={resetData} disabled={!isFirestoreReady} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm disabled:opacity-50">🔄 Resetear</button>
               <button onClick={() => void handleSignOut()} disabled={saveStatus === 'saving'} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50" title={user.email ?? 'Cerrar sesión'}>Cerrar sesión</button>
