@@ -929,18 +929,24 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">📦 GvAutoPartes - Control de Inventario</h1>
-            <p className="text-gray-500 text-sm mt-1">Edita las cantidades y precios. El estado se calcula automáticamente.</p>
-            <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 25/09/2026 | Proveedor: Guzimport, C.A.</p>
+        {/* Header */}
+        <div className="mb-6 border-b pb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">📦 GvAutoPartes</h1>
+              <p className="text-gray-500 text-sm mt-1">Sistema de Inventario y Ventas</p>
+              <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Proveedor: Guzimport, C.A.</p>
+            </div>
+            <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm mt-2 md:mt-0">🚪 Salir</button>
           </div>
-          <div className="flex gap-2">
+          
+          {/* Navegación entre vistas */}
+          <div className="flex gap-2 mb-4">
             <button 
               onClick={() => setCurrentView('inventory')}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
                 currentView === 'inventory' 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-blue-600 text-white shadow-md' 
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
@@ -948,39 +954,36 @@ export default function App() {
             </button>
             <button 
               onClick={() => setCurrentView('sales')}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
                 currentView === 'sales' 
-                  ? 'bg-green-600 text-white' 
+                  ? 'bg-green-600 text-white shadow-md' 
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               💰 Ventas ({sales.length})
             </button>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap gap-2 justify-end">
-              {currentView === 'inventory' ? (
-                <>
-                  <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
-                  <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
-                  <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
-                  <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
-                  <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
-                </>
-              ) : (
-                <>
-                  <button onClick={exportSalesToExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Ventas</button>
-                </>
-              )}
-              <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm">🚪 Salir</button>
-            </div>
-            <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
-            <div className="text-xs">
-              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando...</span>}
-              {saveStatus === 'saved' && <span className="text-green-600">✅ Guardado automáticamente</span>}
-              {saveStatus === 'error' && <span className="text-red-600">❌ Error al guardar</span>}
-            </div>
+
+          {/* Botones de acción según la vista */}
+          <div className="flex flex-wrap gap-2">
+            {currentView === 'inventory' ? (
+              <>
+                <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
+                <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
+                <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
+                <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
+                <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
+                <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
+              </>
+            ) : (
+              <button onClick={exportSalesToExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Ventas</button>
+            )}
+          </div>
+          <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
+          <div className="text-xs mt-2">
+            {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando...</span>}
+            {saveStatus === 'saved' && <span className="text-green-600">✅ Guardado automáticamente</span>}
+            {saveStatus === 'error' && <span className="text-red-600">❌ Error al guardar</span>}
           </div>
         </div>
 
