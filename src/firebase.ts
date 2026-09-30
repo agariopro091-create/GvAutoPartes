@@ -1,14 +1,3 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-
-// Configuración de Firebase - GvAutoPartes
-const firebaseConfig = {
-  apiKey: "AIzaSyAWr3jtWcOaAzKtIdvO5Ww1O1pddfH6k3Y",
-  authDomain: "gvautopartes-4889f.firebaseapp.com",
-  projectId: "gvautopartes-4889f",
-  storageBucket: "gvautopartes-4889f.firebasestorage.app",
-  messagingSenderId: "150608808279",
-  appId: "1:150608808279:web:9051afe3cfb9772e141612"
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -32,13 +21,16 @@ const firebaseConfig = {
 
 export const firebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
-  firebaseConfig.authDomain &&
-  firebaseConfig.projectId &&
-  firebaseConfig.messagingSenderId &&
-  firebaseConfig.appId,
+    firebaseConfig.authDomain &&
+    firebaseConfig.projectId &&
+    firebaseConfig.messagingSenderId &&
+    firebaseConfig.appId,
 );
 
-const firebaseApp = firebaseConfigured
+// Mantener la app de Firebase sin inicializar mientras se trabaja en el proyecto con Qwen Coder.
+export const FIREBASE_SYNC_PAUSED = true;
+
+const firebaseApp = !FIREBASE_SYNC_PAUSED && firebaseConfigured
   ? getApps().length > 0
     ? getApp()
     : initializeApp(firebaseConfig)
