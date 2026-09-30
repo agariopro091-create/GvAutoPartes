@@ -14,7 +14,20 @@ interface TrackedItem extends InventoryItem {
   unitPrice: number;
 }
 
+interface Sale {
+  id: string;
+  itemId: string;
+  sku: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  date: string;
+  customer: string;
+}
+
 const STORAGE_KEY = 'gvautopartes_inventory_data_v5';
+const SALES_KEY = 'gvautopartes_sales_data';
 
 const allItems: TrackedItem[] = inventoryData.flatMap(category => 
   category.items.map((item, idx) => ({
@@ -245,11 +258,27 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
   const [items, setItems] = useState<TrackedItem[]>(loadItems);
+  const [sales, setSales] = useState<Sale[]>(() => {
+    try {
+      const saved = localStorage.getItem(SALES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [currentView, setCurrentView] = useState<'inventory' | 'sales'>('inventory');
   const [currentFilter, setCurrentFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para el modal de ventas
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
+  const [saleQuantity, setSaleQuantity] = useState(1);
+  const [saleCustomer, setSaleCustomer] = useState('');
+  const [saleUnitPrice, setSaleUnitPrice] = useState(0);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
@@ -269,6 +298,181 @@ export default function App() {
     }, 300);
     return () => clearTimeout(timer);
   }, [items]);
+
+  useEffect(() => {
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  }, [sales]);
+
+  const getStockForItem = (item: TrackedItem): number => {
+    const totalSold = sales
+      .filter(sale => sale.itemId === item.id)
+      .reduce((sum, sale) => sum + sale.quantity, 0);
+    const received = item.qtyReceived || 0;
+    return received - totalSold;
+  };
+
+  const handleOpenSaleModal = (item: TrackedItem) => {
+    setSelectedItemForSale(item);
+    setSaleQuantity(1);
+    setSaleCustomer('');
+    setSaleUnitPrice(item.unitPrice);
+    setShowSaleModal(true);
+  };
+
+  const handleRegisterSale = () => {
+    if (!selectedItemForSale) return;
+    
+    const currentStock = getStockForItem(selectedItemForSale);
+    if (saleQuantity > currentStock) {
+      alert(`❌ Stock insuficiente. Disponible: ${currentStock} unidades`);
+      return;
+    }
+    if (saleQuantity <= 0) {
+      alert('❌ La cantidad debe ser mayor a 0');
+      return;
+    }
+    if (saleUnitPrice <= 0) {
+      alert('❌ El precio debe ser mayor a 0');
+      return;
+    }
+
+    const newSale: Sale = {
+      id: `sale-${Date.now()}`,
+      itemId: selectedItemForSale.id,
+      sku: selectedItemForSale.sku,
+      description: selectedItemForSale.description,
+      quantity: saleQuantity,
+      unitPrice: saleUnitPrice,
+      totalPrice: saleQuantity * saleUnitPrice,
+      date: new Date().toISOString(),
+      customer: saleCustomer || 'Cliente general'
+    };
+
+    setSales(prev => [newSale, ...prev]);
+    setShowSaleModal(false);
+    setSelectedItemForSale(null);
+    setSaleQuantity(1);
+    setSaleCustomer('');
+    alert('✅ Venta registrada exitosamente');
+  };
+
+  const monthlySales = useMemo(() => {
+    const grouped: Record<string, Sale[]> = {};
+    sales.forEach(sale => {
+      const month = sale.date.substring(0, 7); // YYYY-MM
+      if (!grouped[month]) grouped[month] = [];
+      grouped[month].push(sale);
+    });
+    return grouped;
+  }, [sales]);
+
+  const totalSalesAmount = useMemo(() => {
+    return sales.reduce((sum, sale) => sum + sale.totalPrice, 0);
+  }, [sales]);
+
+  const lowStockItems = useMemo(() => {
+    return items.filter(item => {
+      const stock = getStockForItem(item);
+      return stock > 0 && stock < 5;
+    });
+  }, [items, sales]);
+
+  const exportSalesToExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'GvAutoPartes';
+      workbook.created = new Date();
+
+      // Hoja 1: Resumen Mensual
+      const summarySheet = workbook.addWorksheet('Resumen Mensual');
+      summarySheet.columns = [
+        { header: 'Mes', key: 'month', width: 15 },
+        { header: 'Total Ventas', key: 'totalSales', width: 15 },
+        { header: 'Monto Total', key: 'totalAmount', width: 18 },
+        { header: 'Productos Vendidos', key: 'itemsSold', width: 20 }
+      ];
+
+      const months = Object.keys(monthlySales).sort().reverse();
+      months.forEach(month => {
+        const monthSales = monthlySales[month];
+        const totalAmount = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
+        const itemsSold = monthSales.reduce((sum, s) => sum + s.quantity, 0);
+        summarySheet.addRow({
+          month: month,
+          totalSales: monthSales.length,
+          totalAmount: totalAmount,
+          itemsSold: itemsSold
+        });
+      });
+
+      // Hoja 2: Detalle de Ventas
+      const detailSheet = workbook.addWorksheet('Detalle de Ventas');
+      detailSheet.columns = [
+        { header: 'Fecha', key: 'date', width: 18 },
+        { header: 'Cliente', key: 'customer', width: 25 },
+        { header: 'SKU', key: 'sku', width: 18 },
+        { header: 'Descripción', key: 'description', width: 40 },
+        { header: 'Cantidad', key: 'quantity', width: 12 },
+        { header: 'Precio Unit.', key: 'unitPrice', width: 14 },
+        { header: 'Total', key: 'totalPrice', width: 14 }
+      ];
+
+      sales.forEach(sale => {
+        detailSheet.addRow({
+          date: new Date(sale.date).toLocaleString('es-VE'),
+          customer: sale.customer,
+          sku: sale.sku,
+          description: sale.description,
+          quantity: sale.quantity,
+          unitPrice: sale.unitPrice,
+          totalPrice: sale.totalPrice
+        });
+      });
+
+      // Hoja 3: Stock Bajo
+      const stockSheet = workbook.addWorksheet('Stock Bajo');
+      stockSheet.columns = [
+        { header: 'SKU', key: 'sku', width: 18 },
+        { header: 'Descripción', key: 'description', width: 40 },
+        { header: 'Stock Actual', key: 'stock', width: 15 },
+        { header: 'Estado', key: 'status', width: 20 }
+      ];
+
+      lowStockItems.forEach(item => {
+        const stock = getStockForItem(item);
+        stockSheet.addRow({
+          sku: item.sku,
+          description: item.description,
+          stock: stock,
+          status: stock === 0 ? '❌ Sin Stock' : '⚠️ Stock Bajo'
+        });
+      });
+
+      // Formato profesional
+      [summarySheet, detailSheet, stockSheet].forEach(sheet => {
+        const headerRow = sheet.getRow(1);
+        headerRow.eachCell((cell: ExcelJS.Cell) => {
+          cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      const fecha = new Date().toLocaleDateString('es-VE').replace(/\//g, '-');
+      link.setAttribute('download', `Ventas_GvAutoPartes_${fecha}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error al exportar ventas:', error);
+      alert('❌ Error al exportar');
+    }
+  };
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
@@ -540,14 +744,44 @@ export default function App() {
             <p className="text-gray-500 text-sm mt-1">Edita las cantidades y precios. El estado se calcula automáticamente.</p>
             <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 25/09/2026 | Proveedor: Guzimport, C.A.</p>
           </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setCurrentView('inventory')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                currentView === 'inventory' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              📋 Inventario
+            </button>
+            <button 
+              onClick={() => setCurrentView('sales')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                currentView === 'sales' 
+                  ? 'bg-green-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              💰 Ventas ({sales.length})
+            </button>
+          </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap gap-2 justify-end">
-              <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
-              <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
-              <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
-              <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
-              <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
-              <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
+              {currentView === 'inventory' ? (
+                <>
+                  <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
+                  <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
+                  <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
+                  <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
+                  <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={exportSalesToExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Ventas</button>
+                </>
+              )}
               <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm">🚪 Salir</button>
             </div>
             <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
@@ -559,32 +793,55 @@ export default function App() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-            <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
-            <div className="text-xs text-gray-600 mt-1">Total Items</div>
+        {currentView === 'inventory' && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+              <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
+              <div className="text-xs text-gray-600 mt-1">Total Items</div>
+            </div>
+            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+              <div className="text-2xl font-bold text-green-600">{stats.ok}</div>
+              <div className="text-xs text-gray-600 mt-1">✅ Completos</div>
+            </div>
+            <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+              <div className="text-2xl font-bold text-red-600">{stats.missing}</div>
+              <div className="text-xs text-gray-600 mt-1">❌ No Vino</div>
+            </div>
+            <div className="bg-yellow-50 rounded-lg p-3 text-center border border-yellow-200">
+              <div className="text-2xl font-bold text-yellow-600">{stats.partial}</div>
+              <div className="text-xs text-gray-600 mt-1">⚠️ Faltan</div>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+              <div className="text-2xl font-bold text-blue-600">{stats.extra}</div>
+              <div className="text-xs text-gray-600 mt-1">⭐ Extra</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+              <div className="text-2xl font-bold text-gray-500">{stats.pending}</div>
+              <div className="text-xs text-gray-600 mt-1">⏳ Pendientes</div>
+            </div>
           </div>
-          <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-            <div className="text-2xl font-bold text-green-600">{stats.ok}</div>
-            <div className="text-xs text-gray-600 mt-1">✅ Completos</div>
+        )}
+
+        {currentView === 'sales' && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+            <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+              <div className="text-3xl font-bold text-green-600">${totalSalesAmount.toFixed(2)}</div>
+              <div className="text-sm text-gray-600 mt-1">💰 Total Vendido</div>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+              <div className="text-3xl font-bold text-blue-600">{sales.length}</div>
+              <div className="text-sm text-gray-600 mt-1">📊 Total Ventas</div>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
+              <div className="text-3xl font-bold text-purple-600">{Object.keys(monthlySales).length}</div>
+              <div className="text-sm text-gray-600 mt-1">📅 Meses con Ventas</div>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
+              <div className="text-3xl font-bold text-orange-600">{lowStockItems.length}</div>
+              <div className="text-sm text-gray-600 mt-1">⚠️ Stock Bajo</div>
+            </div>
           </div>
-          <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
-            <div className="text-2xl font-bold text-red-600">{stats.missing}</div>
-            <div className="text-xs text-gray-600 mt-1">❌ No Vino</div>
-          </div>
-          <div className="bg-yellow-50 rounded-lg p-3 text-center border border-yellow-200">
-            <div className="text-2xl font-bold text-yellow-600">{stats.partial}</div>
-            <div className="text-xs text-gray-600 mt-1">⚠️ Faltan</div>
-          </div>
-          <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-            <div className="text-2xl font-bold text-blue-600">{stats.extra}</div>
-            <div className="text-xs text-gray-600 mt-1">⭐ Extra</div>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-            <div className="text-2xl font-bold text-gray-500">{stats.pending}</div>
-            <div className="text-xs text-gray-600 mt-1">⏳ Pendientes</div>
-          </div>
-        </div>
+        )}
 
         <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
           <div className="flex flex-wrap gap-4 text-sm">
@@ -654,6 +911,14 @@ export default function App() {
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex gap-2 justify-center">
+                        <button 
+                          onClick={() => handleOpenSaleModal(item)}
+                          disabled={getStockForItem(item) <= 0}
+                          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
+                          title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
+                        >
+                          💰
+                        </button>
                         <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
                         <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
                       </div>
@@ -665,16 +930,106 @@ export default function App() {
           </table>
         </div>
         
-        {filteredItems.length === 0 && (
+        {currentView === 'inventory' && filteredItems.length === 0 && (
           <div className="text-center py-12">
             <div className="text-4xl mb-3">🔍</div>
             <h3 className="text-lg font-semibold text-gray-600">No se encontraron resultados</h3>
           </div>
         )}
 
-        <p className="text-xs text-gray-400 mt-4 text-center">
-          Mostrando: <span className="font-bold">{filteredItems.length}</span> de {items.length} productos
-        </p>
+        {currentView === 'inventory' && (
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            Mostrando: <span className="font-bold">{filteredItems.length}</span> de {items.length} productos
+          </p>
+        )}
+
+        {currentView === 'sales' && (() => {
+          const months = Object.keys(monthlySales).sort().reverse();
+          return (
+          <>
+            {lowStockItems.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-bold text-orange-800 mb-3">⚠️ Alerta de Stock Bajo</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {lowStockItems.map(item => {
+                    const stock = getStockForItem(item);
+                    return (
+                      <div key={item.id} className="bg-white rounded-lg p-3 border border-orange-300">
+                        <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
+                        <div className="text-sm text-gray-800 mt-1">{item.description}</div>
+                        <div className="text-xs text-orange-600 font-bold mt-2">
+                          Stock: {stock} {stock === 0 ? '❌' : '⚠️'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {Object.keys(monthlySales).length > 0 ? (
+              <div className="space-y-6">
+                {months.map(month => {
+                  const monthSales = monthlySales[month];
+                  const monthTotal = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
+                  const monthDate = new Date(month + '-01');
+                  const monthName = monthDate.toLocaleDateString('es-VE', { year: 'numeric', month: 'long' });
+                  
+                  return (
+                    <div key={month} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-xl font-bold capitalize">{monthName}</h3>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold">${monthTotal.toFixed(2)}</div>
+                            <div className="text-sm opacity-90">{monthSales.length} ventas</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Fecha</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Cliente</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">SKU</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Producto</th>
+                              <th className="py-3 px-4 text-center font-semibold text-gray-700">Cant.</th>
+                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Unit.</th>
+                              <th className="py-3 px-4 text-right font-semibold text-gray-700">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {monthSales.map(sale => (
+                              <tr key={sale.id} className="hover:bg-gray-50">
+                                <td className="py-3 px-4 text-gray-600">
+                                  {new Date(sale.date).toLocaleDateString('es-VE')}
+                                </td>
+                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customer}</td>
+                                <td className="py-3 px-4 font-mono text-blue-700 text-xs">{sale.sku}</td>
+                                <td className="py-3 px-4 text-gray-800">{sale.description}</td>
+                                <td className="py-3 px-4 text-center font-bold">{sale.quantity}</td>
+                                <td className="py-3 px-4 text-right text-green-700">${sale.unitPrice.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                <div className="text-6xl mb-4">💰</div>
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">No hay ventas registradas</h3>
+                <p className="text-gray-500">Ve al inventario y haz click en "Vender" para registrar tu primera venta</p>
+              </div>
+            )}
+          </>
+          );
+        })()}
 
         <div className="mt-6 pt-4 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-400"><strong className="text-gray-600">GvAutoPartes</strong> | Proveedor: Guzimport, C.A.</p>
@@ -729,6 +1084,89 @@ export default function App() {
                 <div className="flex gap-3">
                   <button onClick={handleSaveEdit} className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold">💾 Guardar</button>
                   <button onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold">❌ Cancelar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSaleModal && selectedItemForSale && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-t-xl">
+                <h2 className="text-xl font-bold">💰 Registrar Venta</h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="font-mono text-sm text-blue-700 font-bold">{selectedItemForSale.sku}</div>
+                  <div className="text-gray-800 mt-1">{selectedItemForSale.description}</div>
+                  <div className="text-xs text-gray-500 mt-1">{selectedItemForSale.vehicles}</div>
+                  <div className="mt-3 flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Stock disponible:</span>
+                    <span className="text-lg font-bold text-green-600">{getStockForItem(selectedItemForSale)} unidades</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+                  <input
+                    type="text"
+                    value={saleCustomer}
+                    onChange={(e) => setSaleCustomer(e.target.value)}
+                    placeholder="Nombre del cliente"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={getStockForItem(selectedItemForSale)}
+                    value={saleQuantity}
+                    onChange={(e) => setSaleQuantity(parseInt(e.target.value) || 1)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Precio Unitario ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={saleUnitPrice}
+                    onChange={(e) => setSaleUnitPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                  />
+                </div>
+
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-700">Total de la Venta:</span>
+                    <span className="text-2xl font-bold text-green-700">${(saleQuantity * saleUnitPrice).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleRegisterSale}
+                    className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold transition-colors"
+                  >
+                    ✅ Registrar Venta
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSaleModal(false);
+                      setSelectedItemForSale(null);
+                      setSaleQuantity(1);
+                      setSaleCustomer('');
+                    }}
+                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
+                  >
+                    ❌ Cancelar
+                  </button>
                 </div>
               </div>
             </div>
