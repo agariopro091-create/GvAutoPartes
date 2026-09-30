@@ -412,11 +412,6 @@ export default function App() {
   }, [items, sales]);
 
 
-
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
-  }
-
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       const status = calculateStatus(item.qtyPdf, item.qtyReceived);
@@ -796,6 +791,10 @@ export default function App() {
   const categories = useMemo(() => {
     return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
