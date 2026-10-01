@@ -5,8 +5,6 @@ import { unitPrices } from './data/prices';
 import { db } from './firebase';
 import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
-import { db } from './firebase';
-import { collection, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 
 interface TrackedItem extends InventoryItem {
   id: string;
@@ -32,8 +30,8 @@ interface Sale {
   customer: string;
 }
 
-const INVENTORY_COLLECTION = 'inventory';
-const SALES_COLLECTION = 'sales';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v6';
+const SALES_KEY = 'gvautopartes_sales_data_v6';
 
 const allItems: TrackedItem[] = inventoryData.flatMap(category => 
   category.items.map((item, idx) => ({
@@ -49,85 +47,45 @@ const allItems: TrackedItem[] = inventoryData.flatMap(category =>
   }))
 );
 
-// Función para inicializar datos en Firestore si está vacío
-async function initializeFirestoreData() {
+function loadItems(): TrackedItem[] {
   try {
-    const inventorySnapshot = await getDocs(collection(db, INVENTORY_COLLECTION));
-    if (inventorySnapshot.empty) {
-      console.log('Inicializando inventario en Firestore...');
-      const batch = writeBatch(db);
-      allItems.forEach(item => {
-        const docRef = doc(db, INVENTORY_COLLECTION, item.sku);
-        batch.set(docRef, item);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const savedItems: TrackedItem[] = JSON.parse(saved);
+      const savedMap = new Map(savedItems.map(item => [item.sku, item]));
+      
+      const syncedItems = allItems.map(originalItem => {
+        const savedItem = savedMap.get(originalItem.sku);
+        if (savedItem) {
+          return {
+            ...originalItem,
+            qtyReceived: savedItem.qtyReceived,
+            unitPrice: savedItem.unitPrice !== undefined ? savedItem.unitPrice : originalItem.unitPrice,
+            inPdf: savedItem.inPdf !== undefined ? savedItem.inPdf : originalItem.inPdf,
+            inExcel: savedItem.inExcel !== undefined ? savedItem.inExcel : originalItem.inExcel,
+            inPhysical: savedItem.inPhysical !== undefined ? savedItem.inPhysical : originalItem.inPhysical,
+          };
+        }
+        return originalItem;
       });
-      await batch.commit();
-      console.log('Inventario inicializado correctamente');
+      
+      const originalSkus = new Set(allItems.map(item => item.sku));
+      const customItems = savedItems.filter(item => !originalSkus.has(item.sku));
+      
+      return [...syncedItems, ...customItems];
     }
   } catch (error) {
-    console.error('Error inicializando Firestore:', error);
+    console.error('Error loading data:', error);
   }
+  return allItems;
 }
 
-// Función para guardar un item en Firestore
-async function saveItemToFirestore(item: TrackedItem) {
+function saveItems(items: TrackedItem[]) {
   try {
-    const docRef = doc(db, INVENTORY_COLLECTION, item.sku);
-    await setDoc(docRef, item);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     return true;
   } catch (error) {
-    console.error('Error guardando item:', error);
-    return false;
-  }
-}
-
-// Función para guardar todos los items en Firestore
-async function saveAllItemsToFirestore(items: TrackedItem[]) {
-  try {
-    const batch = writeBatch(db);
-    items.forEach(item => {
-      const docRef = doc(db, INVENTORY_COLLECTION, item.sku);
-      batch.set(docRef, item);
-    });
-    await batch.commit();
-    return true;
-  } catch (error) {
-    console.error('Error guardando items:', error);
-    return false;
-  }
-}
-
-// Función para eliminar un item de Firestore
-async function deleteItemFromFirestore(sku: string) {
-  try {
-    const docRef = doc(db, INVENTORY_COLLECTION, sku);
-    await deleteDoc(docRef);
-    return true;
-  } catch (error) {
-    console.error('Error eliminando item:', error);
-    return false;
-  }
-}
-
-// Función para guardar una venta en Firestore
-async function saveSaleToFirestore(sale: Sale) {
-  try {
-    const docRef = doc(db, SALES_COLLECTION, sale.id);
-    await setDoc(docRef, sale);
-    return true;
-  } catch (error) {
-    console.error('Error guardando venta:', error);
-    return false;
-  }
-}
-
-// Función para eliminar una venta de Firestore
-async function deleteSaleFromFirestore(saleId: string) {
-  try {
-    const docRef = doc(db, SALES_COLLECTION, saleId);
-    await deleteDoc(docRef);
-    return true;
-  } catch (error) {
-    console.error('Error eliminando venta:', error);
+    console.error('Error saving data:', error);
     return false;
   }
 }
@@ -170,7 +128,7 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
 }
 
 // ============================================
-// SISTEMA DE AUTENTICACIÓN
+// SISTEMA DE AUTENTICACIÓN SIMPLE
 // ============================================
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
@@ -303,18 +261,24 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
-  const [items, setItems] = useState<TrackedItem[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [items, setItems] = useState<TrackedItem[]>(loadItems);
+  const [sales, setSales] = useState<Sale[]>(() => {
+    try {
+      const saved = localStorage.getItem(SALES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [currentView, setCurrentView] = useState<'inventory' | 'sales'>('inventory');
   const [currentFilter, setCurrentFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'syncing'>('syncing');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloudReadyRef = useRef(false);
   const skipNextCloudSaveRef = useRef(false);
   
-  // Estados para el modal de ventas
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
@@ -322,7 +286,6 @@ export default function App() {
   const [saleUnitPrice, setSaleUnitPrice] = useState(0);
   const [salePrice, setSalePrice] = useState(0);
   
-  // Estados para editar/cancelar ventas
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   
@@ -336,56 +299,18 @@ export default function App() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
-  // Inicializar Firestore y configurar listeners en tiempo real
   useEffect(() => {
-    initializeFirestoreData();
-    
-    // Listener para inventario en tiempo real
-    const unsubscribeInventory = onSnapshot(
-      collection(db, INVENTORY_COLLECTION),
-      (snapshot) => {
-        const firestoreItems: TrackedItem[] = [];
-        snapshot.forEach(doc => {
-          firestoreItems.push(doc.data() as TrackedItem);
-        });
-        
-        if (firestoreItems.length === 0) {
-          // Si Firestore está vacío, usar datos locales e inicializar
-          setItems(allItems);
-          saveAllItemsToFirestore(allItems);
-        } else {
-          setItems(firestoreItems);
-        }
-        
-        setSaveStatus('saved');
-      },
-      (error) => {
-        console.error('Error en listener de inventario:', error);
-        setSaveStatus('error');
-        setItems(allItems);
-      }
-    );
+    setSaveStatus('saving');
+    const timer = setTimeout(() => {
+      const success = saveItems(items);
+      setSaveStatus(success ? 'saved' : 'error');
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [items]);
 
-    // Listener para ventas en tiempo real
-    const unsubscribeSales = onSnapshot(
-      collection(db, SALES_COLLECTION),
-      (snapshot) => {
-        const firestoreSales: Sale[] = [];
-        snapshot.forEach(doc => {
-          firestoreSales.push(doc.data() as Sale);
-        });
-        setSales(firestoreSales);
-      },
-      (error) => {
-        console.error('Error en listener de ventas:', error);
-      }
-    );
-
-    return () => {
-      unsubscribeInventory();
-      unsubscribeSales();
-    };
-  }, []);
+  useEffect(() => {
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  }, [sales]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
@@ -408,7 +333,7 @@ export default function App() {
     setShowSaleModal(true);
   };
 
-  const handleRegisterSale = async () => {
+  const handleRegisterSale = () => {
     if (!selectedItemForSale) return;
     
     const currentStock = getStockForItem(selectedItemForSale);
@@ -438,7 +363,6 @@ export default function App() {
       customer: saleCustomer || 'Cliente general'
     };
 
-    await saveSaleToFirestore(newSale);
     setSales(prev => [newSale, ...prev]);
     setShowSaleModal(false);
     setSelectedItemForSale(null);
@@ -453,17 +377,15 @@ export default function App() {
     setShowEditSaleModal(true);
   };
 
-  const handleSaveEditedSale = async (updatedSale: Sale) => {
-    await saveSaleToFirestore(updatedSale);
+  const handleSaveEditedSale = (updatedSale: Sale) => {
     setSales(prev => prev.map(s => s.id === updatedSale.id ? updatedSale : s));
     setShowEditSaleModal(false);
     setEditingSale(null);
     alert('✅ Venta actualizada exitosamente');
   };
 
-  const handleCancelSale = async (saleId: string) => {
+  const handleCancelSale = (saleId: string) => {
     if (window.confirm('¿Estás seguro de cancelar esta venta? El stock será devuelto.')) {
-      await deleteSaleFromFirestore(saleId);
       setSales(prev => prev.filter(s => s.id !== saleId));
       alert('✅ Venta cancelada y stock devuelto');
     }
@@ -472,7 +394,7 @@ export default function App() {
   const monthlySales = useMemo(() => {
     const grouped: Record<string, Sale[]> = {};
     sales.forEach(sale => {
-      const month = sale.date.substring(0, 7); // YYYY-MM
+      const month = sale.date.substring(0, 7);
       if (!grouped[month]) grouped[month] = [];
       grouped[month].push(sale);
     });
@@ -509,44 +431,28 @@ export default function App() {
     });
   }, [items, currentFilter, searchQuery, selectedCategory]);
 
-  const updateQtyPdf = async (id: string, value: string) => {
-    const updatedItems = items.map(item => item.id === id ? { ...item, qtyPdf: parseInt(value) || 0 } : item);
-    setItems(updatedItems);
-    const updatedItem = updatedItems.find(item => item.id === id);
-    if (updatedItem) {
-      await saveItemToFirestore(updatedItem);
-    }
+  const updateQtyPdf = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyPdf: parseInt(value) || 0 } : item));
   };
 
-  const updateQtyReceived = async (id: string, value: string) => {
-    const updatedItems = items.map(item => item.id === id ? { ...item, qtyReceived: value === '' ? null : parseInt(value) } : item);
-    setItems(updatedItems);
-    const updatedItem = updatedItems.find(item => item.id === id);
-    if (updatedItem) {
-      await saveItemToFirestore(updatedItem);
-    }
+  const updateQtyReceived = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyReceived: value === '' ? null : parseInt(value) } : item));
   };
 
-  const updateUnitPrice = async (id: string, value: string) => {
-    const updatedItems = items.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item);
-    setItems(updatedItems);
-    const updatedItem = updatedItems.find(item => item.id === id);
-    if (updatedItem) {
-      await saveItemToFirestore(updatedItem);
-    }
+  const updateUnitPrice = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
   };
 
-  const resetData = async () => {
-    if (window.confirm('¿Resetear todos los datos?')) {
+  const resetData = () => {
+    if (window.confirm('¿Resetear todos los datos? Se perderán todos los cambios locales.')) {
       setItems(allItems);
-      await saveAllItemsToFirestore(allItems);
+      saveItems(allItems);
       setSaveStatus('saved');
     }
   };
 
-  const handleDeleteItem = async (id: string, sku: string) => {
+  const handleDeleteItem = (id: string, sku: string) => {
     if (window.confirm(`¿Eliminar "${sku}"?`)) {
-      await deleteItemFromFirestore(sku);
       setItems(prev => prev.filter(item => item.id !== id));
     }
   };
@@ -556,19 +462,18 @@ export default function App() {
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (!editingItem) return;
     if (!editingItem.sku.trim() || !editingItem.description.trim()) {
       alert('❌ SKU y descripción son obligatorios');
       return;
     }
-    await saveItemToFirestore(editingItem);
     setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
     setShowEditModal(false);
     setEditingItem(null);
   };
 
-  const handleAddItem = async () => {
+  const handleAddItem = () => {
     if (!newItem.sku.trim() || !newItem.description.trim()) {
       alert('❌ SKU y descripción son obligatorios');
       return;
@@ -596,7 +501,6 @@ export default function App() {
       unitPrice: 0
     };
     
-    await saveItemToFirestore(newItemData);
     setItems(prev => [...prev, newItemData]);
     setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
@@ -626,12 +530,15 @@ export default function App() {
       const now = new Date();
       const fecha = now.toLocaleDateString('es-VE');
       const hora = now.toLocaleTimeString('es-VE');
-      const totalItems = items.length;
-      const completados = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
-      const faltantes = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
-      const incompletos = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
-      const extra = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
-      const pendientes = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
+      
+      const exportItems = allItems.length > 0 ? allItems : items;
+      
+      const totalItems = exportItems.length;
+      const completados = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
+      const faltantes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
+      const incompletos = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
+      const extra = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
+      const pendientes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
 
       worksheet.mergeCells('A1:K1');
       const cellEmpresa = worksheet.getCell('A1');
@@ -665,7 +572,7 @@ export default function App() {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       });
 
-      items.forEach((item, index) => {
+      exportItems.forEach((item, index) => {
         let indicators = '';
         if (item.inPdf) indicators += '🔴 PDF ';
         if (item.inExcel) indicators += '🟢 Excel ';
@@ -706,7 +613,7 @@ export default function App() {
       });
 
       worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
-      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + items.length, column: 11 } };
+      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + exportItems.length, column: 11 } };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -729,7 +636,6 @@ export default function App() {
       workbook.creator = 'GvAutoPartes';
       workbook.created = new Date();
 
-      // Hoja 1: Resumen Mensual
       const summarySheet = workbook.addWorksheet('Resumen Mensual');
       summarySheet.columns = [
         { header: 'Mes', key: 'month', width: 15 },
@@ -751,7 +657,6 @@ export default function App() {
         });
       });
 
-      // Hoja 2: Detalle de Ventas
       const detailSheet = workbook.addWorksheet('Detalle de Ventas');
       detailSheet.columns = [
         { header: 'Fecha', key: 'date', width: 15 },
@@ -783,7 +688,6 @@ export default function App() {
         });
       });
 
-      // Formato de moneda
       detailSheet.eachRow((row: ExcelJS.Row, rowNumber: number) => {
         if (rowNumber > 1) {
           row.getCell(6).numFmt = '$#,##0.00';
@@ -801,7 +705,6 @@ export default function App() {
         }
       });
 
-      // Hoja 3: Stock Bajo
       const stockSheet = workbook.addWorksheet('Stock Bajo');
       stockSheet.columns = [
         { header: 'SKU', key: 'sku', width: 18 },
@@ -820,7 +723,6 @@ export default function App() {
         });
       });
 
-      // Formato profesional
       [summarySheet, detailSheet, stockSheet].forEach(sheet => {
         const headerRow = sheet.getRow(1);
         headerRow.eachCell((cell: ExcelJS.Cell) => {
@@ -848,23 +750,37 @@ export default function App() {
 
   const exportJSON = () => {
     const fecha = new Date().toISOString().split('T')[0];
-    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+    const backup = {
+      version: '6.0',
+      date: new Date().toISOString(),
+      items: items,
+      sales: sales
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `Respaldo_GvAutoPartes_${fecha}.json`;
     link.click();
   };
 
-  const importJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        if (Array.isArray(data) && data.every((item: any) => 'sku' in item)) {
+        
+        // Soportar formato nuevo (con version) y antiguo (array directo)
+        if (data.version && data.items) {
+          setItems(data.items);
+          if (data.sales) setSales(data.sales);
+          saveItems(data.items);
+          localStorage.setItem(SALES_KEY, JSON.stringify(data.sales || []));
+          alert(`✅ Respaldo cargado: ${data.items.length} productos y ${(data.sales || []).length} ventas`);
+        } else if (Array.isArray(data) && data.every((item: any) => 'sku' in item)) {
           setItems(data);
-          await saveAllItemsToFirestore(data);
+          saveItems(data);
           alert('✅ Respaldo cargado');
         } else {
           alert('❌ Archivo inválido');
@@ -935,22 +851,23 @@ export default function App() {
                   <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
                   <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
                   <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
-                  <button onClick={async () => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); await saveAllItemsToFirestore(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
+                  <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
                   <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
                 </>
               ) : (
                 <>
                   <button onClick={exportSalesToExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Ventas</button>
+                  <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
                 </>
               )}
               <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm">🚪 Salir</button>
             </div>
             <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
             <div className="text-xs">
-              {saveStatus === 'syncing' && <span className="text-blue-600">🔄 Sincronizando con Firebase...</span>}
-              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando en la nube...</span>}
-              {saveStatus === 'saved' && <span className="text-green-600">✅ Sincronizado en tiempo real</span>}
-              {saveStatus === 'error' && <span className="text-red-600">❌ Error de conexión</span>}
+              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando...</span>}
+              {saveStatus === 'saved' && <span className="text-green-600">✅ Guardado automáticamente</span>}
+              {saveStatus === 'error' && <span className="text-red-600">❌ Error al guardar</span>}
             </div>
           </div>
         </div>
