@@ -277,7 +277,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloudReadyRef = useRef(false);
-  const remoteUpdateRef = useRef(false);
+  const skipNextCloudSaveRef = useRef(false);
   
   // Estados para el modal de ventas
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -306,6 +306,7 @@ export default function App() {
     const unsubscribe = onSnapshot(inventoryRef, snapshot => {
       if (snapshot.empty) {
         const initial = buildInitialInventory();
+        skipNextCloudSaveRef.current = true;
         setItems(initial);
         cloudReadyRef.current = true;
         void replaceInventory(db, initial, 'local-admin').catch(error => {
@@ -319,7 +320,7 @@ export default function App() {
         ...document.data(),
         id: document.id,
       })) as FirestoreTrackedItem[];
-      remoteUpdateRef.current = true;
+      skipNextCloudSaveRef.current = true;
       cloudReadyRef.current = true;
       setItems(remoteItems);
       setSaveStatus('saved');
@@ -332,11 +333,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!cloudReadyRef.current) return;
+
     setSaveStatus('saving');
     const timer = setTimeout(() => {
       const success = saveItems(items);
-      if (cloudReadyRef.current && remoteUpdateRef.current) {
-        remoteUpdateRef.current = false;
+      if (skipNextCloudSaveRef.current) {
+        skipNextCloudSaveRef.current = false;
         setSaveStatus(success ? 'saved' : 'error');
         return;
       }
