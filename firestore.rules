@@ -45,15 +45,14 @@ service cloud.firestore {
     }
 
     match /inventory/{productId} {
-      allow read: if signedIn();
-      allow create, update: if hasRole(['admin', 'employee'])
-        && validProduct(request.resource.data);
-      allow delete: if hasRole(['admin', 'employee']);
+      allow read: if true;
+      allow create, update: if validProduct(request.resource.data);
+      allow delete: if true;
     }
 
     match /system/{documentId} {
-      allow read: if signedIn();
-      allow create, update: if hasRole(['admin', 'employee']) && (
+      allow read: if true;
+      allow create, update: if (
         (documentId == 'inventorySeed'
           && request.resource.data.keys().hasOnly([
             'version', 'skippedExistingData', 'seededAt', 'updatedBy'
