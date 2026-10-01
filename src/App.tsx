@@ -328,7 +328,7 @@ export default function App() {
       setSaveStatus('error');
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
