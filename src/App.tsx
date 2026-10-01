@@ -1,9 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
-import { db } from './firebase';
-import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
 
 interface TrackedItem extends InventoryItem {
@@ -27,7 +24,10 @@ interface Sale {
   salePrice: number;
   totalPrice: number;
   date: string;
-  customer: string;
+  customerName: string;
+  customerPhone: string;
+  customerId: string;
+  notes: string;
 }
 
 const STORAGE_KEY = 'gvautopartes_inventory_data_v6';
@@ -75,7 +75,7 @@ function loadItems(): TrackedItem[] {
       return [...syncedItems, ...customItems];
     }
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error('Error loading ', error);
   }
   return allItems;
 }
@@ -85,7 +85,7 @@ function saveItems(items: TrackedItem[]) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     return true;
   } catch (error) {
-    console.error('Error saving data:', error);
+    console.error('Error saving ', error);
     return false;
   }
 }
@@ -127,9 +127,6 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
   );
 }
 
-// ============================================
-// SISTEMA DE AUTENTICACIÓN SIMPLE
-// ============================================
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
@@ -276,15 +273,17 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cloudReadyRef = useRef(false);
-  const skipNextCloudSaveRef = useRef(false);
   
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
-  const [saleCustomer, setSaleCustomer] = useState('');
+  const [saleCustomerName, setSaleCustomerName] = useState('');
+  const [saleCustomerPhone, setSaleCustomerPhone] = useState('');
+  const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleUnitPrice, setSaleUnitPrice] = useState(0);
   const [salePrice, setSalePrice] = useState(0);
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saleNotes, setSaleNotes] = useState('');
   
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -327,9 +326,13 @@ export default function App() {
   const handleOpenSaleModal = (item: TrackedItem) => {
     setSelectedItemForSale(item);
     setSaleQuantity(1);
-    setSaleCustomer('');
+    setSaleCustomerName('');
+    setSaleCustomerPhone('');
+    setSaleCustomerId('');
     setSaleUnitPrice(item.unitPrice);
     setSalePrice(item.unitPrice);
+    setSaleDate(new Date().toISOString().split('T')[0]);
+    setSaleNotes('');
     setShowSaleModal(true);
   };
 
@@ -345,8 +348,8 @@ export default function App() {
       alert('❌ La cantidad debe ser mayor a 0');
       return;
     }
-    if (saleUnitPrice <= 0) {
-      alert('❌ El precio debe ser mayor a 0');
+    if (salePrice <= 0) {
+      alert('❌ El precio de venta debe ser mayor a 0');
       return;
     }
 
@@ -359,16 +362,23 @@ export default function App() {
       unitPrice: saleUnitPrice,
       salePrice: salePrice,
       totalPrice: saleQuantity * salePrice,
-      date: new Date().toISOString(),
-      customer: saleCustomer || 'Cliente general'
+      date: saleDate,
+      customerName: saleCustomerName || 'Cliente general',
+      customerPhone: saleCustomerPhone,
+      customerId: saleCustomerId,
+      notes: saleNotes
     };
 
     setSales(prev => [newSale, ...prev]);
     setShowSaleModal(false);
     setSelectedItemForSale(null);
     setSaleQuantity(1);
-    setSaleCustomer('');
+    setSaleCustomerName('');
+    setSaleCustomerPhone('');
+    setSaleCustomerId('');
     setSalePrice(0);
+    setSaleDate(new Date().toISOString().split('T')[0]);
+    setSaleNotes('');
     alert('✅ Venta registrada exitosamente');
   };
 
@@ -409,10 +419,26 @@ export default function App() {
     return sales.reduce((sum, sale) => sum + ((sale.salePrice - sale.unitPrice) * sale.quantity), 0);
   }, [sales]);
 
-  const lowStockItems = useMemo(() => {
+  const frequentSalesItems = useMemo(() => {
+    // Productos que se han vendido al menos 2 veces
+    const salesCount: Record<string, number> = {};
+    sales.forEach(sale => {
+      salesCount[sale.sku] = (salesCount[sale.sku] || 0) + 1;
+    });
+    
+    return items
+      .filter(item => salesCount[item.sku] >= 2)
+      .map(item => ({
+        ...item,
+        salesCount: salesCount[item.sku] || 0
+      }))
+      .sort((a, b) => b.salesCount - a.salesCount);
+  }, [items, sales]);
+
+  const outOfStockItems = useMemo(() => {
     return items.filter(item => {
       const stock = getStockForItem(item);
-      return stock > 0 && stock < 5;
+      return stock === 0 && item.qtyReceived !== null && item.qtyReceived > 0;
     });
   }, [items, sales]);
 
@@ -660,14 +686,17 @@ export default function App() {
       const detailSheet = workbook.addWorksheet('Detalle de Ventas');
       detailSheet.columns = [
         { header: 'Fecha', key: 'date', width: 15 },
-        { header: 'Cliente', key: 'customer', width: 25 },
+        { header: 'Cliente', key: 'customerName', width: 25 },
+        { header: 'Teléfono', key: 'customerPhone', width: 15 },
+        { header: 'Cédula', key: 'customerId', width: 15 },
         { header: 'SKU', key: 'sku', width: 18 },
         { header: 'Descripción', key: 'description', width: 40 },
         { header: 'Cantidad', key: 'quantity', width: 12 },
         { header: 'Precio Ref.', key: 'unitPrice', width: 14 },
         { header: 'Precio Venta', key: 'salePrice', width: 14 },
         { header: 'Total', key: 'totalPrice', width: 14 },
-        { header: 'Ganancia', key: 'profit', width: 14 }
+        { header: 'Ganancia', key: 'profit', width: 14 },
+        { header: 'Notas', key: 'notes', width: 30 }
       ];
 
       sales.forEach(sale => {
@@ -677,25 +706,28 @@ export default function App() {
         
         detailSheet.addRow({
           date: formattedDate,
-          customer: sale.customer,
+          customerName: sale.customerName,
+          customerPhone: sale.customerPhone,
+          customerId: sale.customerId,
           sku: sale.sku,
           description: sale.description,
           quantity: sale.quantity,
           unitPrice: sale.unitPrice,
           salePrice: sale.salePrice,
           totalPrice: sale.totalPrice,
-          profit: profit
+          profit: profit,
+          notes: sale.notes
         });
       });
 
       detailSheet.eachRow((row: ExcelJS.Row, rowNumber: number) => {
         if (rowNumber > 1) {
-          row.getCell(6).numFmt = '$#,##0.00';
-          row.getCell(7).numFmt = '$#,##0.00';
           row.getCell(8).numFmt = '$#,##0.00';
           row.getCell(9).numFmt = '$#,##0.00';
+          row.getCell(10).numFmt = '$#,##0.00';
+          row.getCell(11).numFmt = '$#,##0.00';
           
-          const profitCell = row.getCell(9);
+          const profitCell = row.getCell(11);
           const profitValue = profitCell.value as number;
           if (profitValue > 0) {
             profitCell.font = { color: { argb: 'FF059669' }, bold: true };
@@ -705,21 +737,36 @@ export default function App() {
         }
       });
 
-      const stockSheet = workbook.addWorksheet('Stock Bajo');
+      const stockSheet = workbook.addWorksheet('Alertas de Stock');
       stockSheet.columns = [
         { header: 'SKU', key: 'sku', width: 18 },
         { header: 'Descripción', key: 'description', width: 40 },
         { header: 'Stock Actual', key: 'stock', width: 15 },
+        { header: 'Ventas Realizadas', key: 'salesCount', width: 18 },
         { header: 'Estado', key: 'status', width: 20 }
       ];
 
-      lowStockItems.forEach(item => {
+      // Productos sin stock
+      outOfStockItems.forEach((item: TrackedItem) => {
+        const salesCount = sales.filter(s => s.sku === item.sku).length;
+        stockSheet.addRow({
+          sku: item.sku,
+          description: item.description,
+          stock: 0,
+          salesCount: salesCount,
+          status: '❌ Sin Stock'
+        });
+      });
+
+      // Productos con ventas frecuentes
+      frequentSalesItems.forEach((item: any) => {
         const stock = getStockForItem(item);
         stockSheet.addRow({
           sku: item.sku,
           description: item.description,
           stock: stock,
-          status: stock === 0 ? '❌ Sin Stock' : '⚠️ Stock Bajo'
+          salesCount: item.salesCount,
+          status: '🔥 Ventas Frecuentes'
         });
       });
 
@@ -771,7 +818,6 @@ export default function App() {
       try {
         const data = JSON.parse(e.target?.result as string);
         
-        // Soportar formato nuevo (con version) y antiguo (array directo)
         if (data.version && data.items) {
           setItems(data.items);
           if (data.sales) setSales(data.sales);
@@ -807,10 +853,6 @@ export default function App() {
   const categories = useMemo(() => {
     return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
-
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
-  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
@@ -920,98 +962,102 @@ export default function App() {
               <div className="text-sm text-gray-600 mt-1">📅 Meses con Ventas</div>
             </div>
             <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
-              <div className="text-3xl font-bold text-orange-600">{lowStockItems.length}</div>
-              <div className="text-sm text-gray-600 mt-1">⚠️ Stock Bajo</div>
+              <div className="text-3xl font-bold text-orange-600">{frequentSalesItems.length}</div>
+              <div className="text-sm text-gray-600 mt-1">🔥 Ventas Frecuentes</div>
             </div>
           </div>
         )}
 
-        <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span className="font-bold text-gray-700">Leyenda:</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600"></div>PDF</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600"></div>Excel</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-600"></div>Físico</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['all', 'pending', 'ok', 'missing', 'partial', 'extra'].map(filter => (
-              <button key={filter} onClick={() => setCurrentFilter(filter)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${currentFilter === filter ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                {filter === 'all' ? 'Todos' : filter === 'pending' ? '⏳ Pendientes' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ No Vino' : filter === 'partial' ? '⚠️ Faltan' : '⭐ Extra'}
-              </button>
-            ))}
-          </div>
-        </div>
+        {currentView === 'inventory' && (
+          <>
+            <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span className="font-bold text-gray-700">Leyenda:</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600"></div>PDF</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600"></div>Excel</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-600"></div>Físico</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'pending', 'ok', 'missing', 'partial', 'extra'].map(filter => (
+                  <button key={filter} onClick={() => setCurrentFilter(filter)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${currentFilter === filter ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                    {filter === 'all' ? 'Todos' : filter === 'pending' ? '⏳ Pendientes' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ No Vino' : filter === 'partial' ? '⚠️ Faltan' : '⭐ Extra'}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          <div className="flex-1 relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" placeholder="Buscar por SKU, descripción o vehículo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
-          </div>
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 outline-none text-sm bg-white min-w-[200px]">
-            <option value="all">Todas las Categorías</option>
-            {categories.map(cat => <option key={cat.id} value={cat.id.toString()}>{cat.name} ({cat.count})</option>)}
-          </select>
-        </div>
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+              <div className="flex-1 relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" placeholder="Buscar por SKU, descripción o vehículo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
+              </div>
+              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 outline-none text-sm bg-white min-w-[200px]">
+                <option value="all">Todas las Categorías</option>
+                {categories.map(cat => <option key={cat.id} value={cat.id.toString()}>{cat.name} ({cat.count})</option>)}
+              </select>
+            </div>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full bg-white text-sm">
-            <thead className="bg-gray-800 text-white text-xs uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4 text-center">Indicadores</th>
-                <th className="py-3 px-4 text-left">Código SKU</th>
-                <th className="py-3 px-4 text-left">Descripción / Vehículos</th>
-                <th className="py-3 px-4 text-center">Enviado (PDF)</th>
-                <th className="py-3 px-4 text-center">Recibido (Físico)</th>
-                <th className="py-3 px-4 text-center">Estado</th>
-                <th className="py-3 px-4 text-center">Precio Unitario</th>
-                <th className="py-3 px-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {filteredItems.map((item) => {
-                const status = calculateStatus(item.qtyPdf, item.qtyReceived);
-                return (
-                  <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
-                    <td className="py-3 px-4 text-center"><IndicatorDots inPdf={item.inPdf} inExcel={item.inExcel} inPhysical={item.inPhysical} /></td>
-                    <td className="py-3 px-4 font-mono font-bold text-blue-700">{item.sku}</td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-gray-800">{item.description}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{item.vehicles}</div>
-                      <div className="text-xs text-gray-400 mt-0.5 italic">{item.category}</div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyPdf} onChange={(e) => updateQtyPdf(item.id, e.target.value)} />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyReceived === null ? '' : item.qtyReceived} placeholder="0" onChange={(e) => updateQtyReceived(item.id, e.target.value)} onFocus={(e) => e.target.select()} />
-                    </td>
-                    <td className="py-3 px-4 text-center"><StatusBadge status={status} /></td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" step="0.01" className="w-[90px] text-center border-2 border-dashed border-green-300 rounded-md px-2 py-1 font-bold text-green-700 focus:border-green-500 focus:bg-green-50 outline-none" value={item.unitPrice} onChange={(e) => updateUnitPrice(item.id, e.target.value)} onFocus={(e) => e.target.select()} placeholder="0.00" />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex gap-2 justify-center">
-                        <button 
-                          onClick={() => handleOpenSaleModal(item)}
-                          disabled={getStockForItem(item) <= 0}
-                          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
-                          title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
-                        >
-                          💰
-                        </button>
-                        <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
-                        <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full bg-white text-sm">
+                <thead className="bg-gray-800 text-white text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4 text-center">Indicadores</th>
+                    <th className="py-3 px-4 text-left">Código SKU</th>
+                    <th className="py-3 px-4 text-left">Descripción / Vehículos</th>
+                    <th className="py-3 px-4 text-center">Enviado (PDF)</th>
+                    <th className="py-3 px-4 text-center">Recibido (Físico)</th>
+                    <th className="py-3 px-4 text-center">Estado</th>
+                    <th className="py-3 px-4 text-center">Precio Unitario</th>
+                    <th className="py-3 px-4 text-center">Acciones</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="text-gray-700">
+                  {filteredItems.map((item) => {
+                    const status = calculateStatus(item.qtyPdf, item.qtyReceived);
+                    return (
+                      <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
+                        <td className="py-3 px-4 text-center"><IndicatorDots inPdf={item.inPdf} inExcel={item.inExcel} inPhysical={item.inPhysical} /></td>
+                        <td className="py-3 px-4 font-mono font-bold text-blue-700">{item.sku}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-800">{item.description}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{item.vehicles}</div>
+                          <div className="text-xs text-gray-400 mt-0.5 italic">{item.category}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyPdf} onChange={(e) => updateQtyPdf(item.id, e.target.value)} />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyReceived === null ? '' : item.qtyReceived} placeholder="0" onChange={(e) => updateQtyReceived(item.id, e.target.value)} onFocus={(e) => e.target.select()} />
+                        </td>
+                        <td className="py-3 px-4 text-center"><StatusBadge status={status} /></td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" step="0.01" className="w-[90px] text-center border-2 border-dashed border-green-300 rounded-md px-2 py-1 font-bold text-green-700 focus:border-green-500 focus:bg-green-50 outline-none" value={item.unitPrice} onChange={(e) => updateUnitPrice(item.id, e.target.value)} onFocus={(e) => e.target.select()} placeholder="0.00" />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex gap-2 justify-center">
+                            <button 
+                              onClick={() => handleOpenSaleModal(item)}
+                              disabled={getStockForItem(item) <= 0}
+                              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
+                              title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
+                            >
+                              💰
+                            </button>
+                            <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
+                            <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
         
         {currentView === 'inventory' && filteredItems.length === 0 && (
           <div className="text-center py-12">
@@ -1028,18 +1074,40 @@ export default function App() {
 
         {currentView === 'sales' && (
           <>
-            {lowStockItems.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-bold text-orange-800 mb-3">⚠️ Alerta de Stock Bajo</h3>
+            {/* Alerta de Productos Sin Stock */}
+            {outOfStockItems.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-bold text-red-800 mb-3">❌ Alerta de Productos Sin Stock</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {lowStockItems.map(item => {
+                  {outOfStockItems.map((item: TrackedItem) => {
+                    const salesCount = sales.filter(s => s.sku === item.sku).length;
+                    return (
+                      <div key={item.id} className="bg-white rounded-lg p-3 border border-red-300">
+                        <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
+                        <div className="text-sm text-gray-800 mt-1">{item.description}</div>
+                        <div className="text-xs text-red-600 font-bold mt-2">
+                          ❌ Sin Stock | 🔥 {salesCount} ventas realizadas
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Ventas Frecuentes */}
+            {frequentSalesItems.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-bold text-orange-800 mb-3">🔥 Ventas Frecuentes</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {frequentSalesItems.map((item: any) => {
                     const stock = getStockForItem(item);
                     return (
                       <div key={item.id} className="bg-white rounded-lg p-3 border border-orange-300">
                         <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
                         <div className="text-sm text-gray-800 mt-1">{item.description}</div>
                         <div className="text-xs text-orange-600 font-bold mt-2">
-                          Stock: {stock} {stock === 0 ? '❌' : '⚠️'}
+                          🔥 {item.salesCount} ventas | Stock: {stock}
                         </div>
                       </div>
                     );
@@ -1073,6 +1141,8 @@ export default function App() {
                             <tr>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Fecha</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Cliente</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Teléfono</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Cédula</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">SKU</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Producto</th>
                               <th className="py-3 px-4 text-center font-semibold text-gray-700">Cant.</th>
@@ -1088,7 +1158,9 @@ export default function App() {
                                 <td className="py-3 px-4 text-gray-600">
                                   {new Date(sale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </td>
-                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customer}</td>
+                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customerName}</td>
+                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerPhone || '-'}</td>
+                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerId || '-'}</td>
                                 <td className="py-3 px-4 font-mono text-blue-700 text-xs">{sale.sku}</td>
                                 <td className="py-3 px-4 text-gray-800">{sale.description}</td>
                                 <td className="py-3 px-4 text-center font-bold">{sale.quantity}</td>
@@ -1193,7 +1265,7 @@ export default function App() {
 
         {showEditSaleModal && editingSale && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
                 <h2 className="text-xl font-bold">✏️ Editar Venta</h2>
               </div>
@@ -1201,18 +1273,46 @@ export default function App() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="font-mono text-sm text-blue-700 font-bold">{editingSale.sku}</div>
                   <div className="text-gray-800 mt-1">{editingSale.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Fecha original: {new Date(editingSale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
                   <input
-                    type="text"
-                    value={editingSale.customer}
-                    onChange={(e) => setEditingSale({...editingSale, customer: e.target.value})}
+                    type="date"
+                    value={editingSale.date.split('T')[0]}
+                    onChange={(e) => setEditingSale({...editingSale, date: new Date(e.target.value).toISOString()})}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
+                  <input
+                    type="text"
+                    value={editingSale.customerName}
+                    onChange={(e) => setEditingSale({...editingSale, customerName: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
+                    <input
+                      type="tel"
+                      value={editingSale.customerPhone}
+                      onChange={(e) => setEditingSale({...editingSale, customerPhone: e.target.value})}
+                      placeholder="0414-1234567"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
+                    <input
+                      type="text"
+                      value={editingSale.customerId}
+                      onChange={(e) => setEditingSale({...editingSale, customerId: e.target.value})}
+                      placeholder="V-12345678"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
@@ -1248,6 +1348,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
+                  <textarea
+                    value={editingSale.notes}
+                    onChange={(e) => setEditingSale({...editingSale, notes: e.target.value})}
+                    placeholder="Devolución, cambio, observaciones..."
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none resize-none"
+                  />
+                </div>
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-gray-700">Total Actualizado:</span>
@@ -1265,7 +1375,7 @@ export default function App() {
 
         {showSaleModal && selectedItemForSale && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-t-xl">
                 <h2 className="text-xl font-bold">💰 Registrar Venta</h2>
               </div>
@@ -1280,14 +1390,45 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
                   <input
-                    type="text"
-                    value={saleCustomer}
-                    onChange={(e) => setSaleCustomer(e.target.value)}
-                    placeholder="Nombre del cliente"
+                    type="date"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
+                  <input
+                    type="text"
+                    value={saleCustomerName}
+                    onChange={(e) => setSaleCustomerName(e.target.value)}
+                    placeholder="Nombre completo"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
+                    <input
+                      type="tel"
+                      value={saleCustomerPhone}
+                      onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                      placeholder="0414-1234567"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
+                    <input
+                      type="text"
+                      value={saleCustomerId}
+                      onChange={(e) => setSaleCustomerId(e.target.value)}
+                      placeholder="V-12345678"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
@@ -1331,6 +1472,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
+                  <textarea
+                    value={saleNotes}
+                    onChange={(e) => setSaleNotes(e.target.value)}
+                    placeholder="Observaciones adicionales..."
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none resize-none"
+                  />
+                </div>
                 <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-gray-700">Total de la Venta:</span>
@@ -1357,8 +1508,12 @@ export default function App() {
                       setShowSaleModal(false);
                       setSelectedItemForSale(null);
                       setSaleQuantity(1);
-                      setSaleCustomer('');
+                      setSaleCustomerName('');
+                      setSaleCustomerPhone('');
+                      setSaleCustomerId('');
                       setSalePrice(0);
+                      setSaleDate(new Date().toISOString().split('T')[0]);
+                      setSaleNotes('');
                     }}
                     className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
                   >
