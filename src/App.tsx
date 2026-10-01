@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
+import { db } from './firebase';
+import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
@@ -308,6 +311,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'syncing'>('syncing');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cloudReadyRef = useRef(false);
+  const skipNextCloudSaveRef = useRef(false);
   
   // Estados para el modal de ventas
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -886,6 +891,10 @@ export default function App() {
   const categories = useMemo(() => {
     return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
