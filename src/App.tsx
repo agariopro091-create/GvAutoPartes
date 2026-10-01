@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
+import { db } from './firebase';
+import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
 
 interface TrackedItem extends InventoryItem {
@@ -273,6 +276,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cloudReadyRef = useRef(false);
+  const remoteUpdateRef = useRef(false);
   
   // Estados para ventas
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -298,10 +303,54 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
   useEffect(() => {
+    const inventoryRef = collection(db, 'inventory');
+    const unsubscribe = onSnapshot(inventoryRef, snapshot => {
+      if (snapshot.empty) {
+        const initial = buildInitialInventory();
+        setItems(initial);
+        cloudReadyRef.current = true;
+        void replaceInventory(db, initial, 'local-admin').catch(error => {
+          console.error('[v0] No se pudo inicializar Firebase:', error);
+          setSaveStatus('error');
+        });
+        return;
+      }
+
+      const remoteItems = snapshot.docs.map(document => ({
+        ...document.data(),
+        id: document.id,
+      })) as FirestoreTrackedItem[];
+      remoteUpdateRef.current = true;
+      cloudReadyRef.current = true;
+      setItems(remoteItems);
+      setSaveStatus('saved');
+    }, error => {
+      console.error('[v0] Error sincronizando Firebase:', error);
+      setSaveStatus('error');
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     setSaveStatus('saving');
     const timer = setTimeout(() => {
       const success = saveItems(items);
-      setSaveStatus(success ? 'saved' : 'error');
+      if (cloudReadyRef.current && remoteUpdateRef.current) {
+        remoteUpdateRef.current = false;
+        setSaveStatus(success ? 'saved' : 'error');
+        return;
+      }
+      if (cloudReadyRef.current) {
+        void replaceInventory(db, items, 'local-admin')
+          .then(() => setSaveStatus(success ? 'saved' : 'error'))
+          .catch(error => {
+            console.error('[v0] Error guardando en Firebase:', error);
+            setSaveStatus('error');
+          });
+      } else {
+        setSaveStatus(success ? 'saved' : 'error');
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [items]);
