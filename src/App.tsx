@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
+import { db } from './firebase';
+import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
 
 interface TrackedItem extends InventoryItem {
@@ -273,6 +276,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cloudReadyRef = useRef(false);
+  const skipNextCloudSaveRef = useRef(false);
   
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
@@ -802,6 +807,10 @@ export default function App() {
   const categories = useMemo(() => {
     return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
