@@ -937,92 +937,96 @@ export default function App() {
           </div>
         )}
 
-        <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span className="font-bold text-gray-700">Leyenda:</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600"></div>PDF</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600"></div>Excel</span>
-            <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-600"></div>Físico</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['all', 'pending', 'ok', 'missing', 'partial', 'extra'].map(filter => (
-              <button key={filter} onClick={() => setCurrentFilter(filter)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${currentFilter === filter ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                {filter === 'all' ? 'Todos' : filter === 'pending' ? '⏳ Pendientes' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ No Vino' : filter === 'partial' ? '⚠️ Faltan' : '⭐ Extra'}
-              </button>
-            ))}
-          </div>
-        </div>
+        {currentView === 'inventory' && (
+          <>
+            <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span className="font-bold text-gray-700">Leyenda:</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600"></div>PDF</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600"></div>Excel</span>
+                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-600"></div>Físico</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'pending', 'ok', 'missing', 'partial', 'extra'].map(filter => (
+                  <button key={filter} onClick={() => setCurrentFilter(filter)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${currentFilter === filter ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                    {filter === 'all' ? 'Todos' : filter === 'pending' ? '⏳ Pendientes' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ No Vino' : filter === 'partial' ? '⚠️ Faltan' : '⭐ Extra'}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          <div className="flex-1 relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" placeholder="Buscar por SKU, descripción o vehículo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
-          </div>
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 outline-none text-sm bg-white min-w-[200px]">
-            <option value="all">Todas las Categorías</option>
-            {categories.map(cat => <option key={cat.id} value={cat.id.toString()}>{cat.name} ({cat.count})</option>)}
-          </select>
-        </div>
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+              <div className="flex-1 relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" placeholder="Buscar por SKU, descripción o vehículo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
+              </div>
+              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 outline-none text-sm bg-white min-w-[200px]">
+                <option value="all">Todas las Categorías</option>
+                {categories.map(cat => <option key={cat.id} value={cat.id.toString()}>{cat.name} ({cat.count})</option>)}
+              </select>
+            </div>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full bg-white text-sm">
-            <thead className="bg-gray-800 text-white text-xs uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4 text-center">Indicadores</th>
-                <th className="py-3 px-4 text-left">Código SKU</th>
-                <th className="py-3 px-4 text-left">Descripción / Vehículos</th>
-                <th className="py-3 px-4 text-center">Enviado (PDF)</th>
-                <th className="py-3 px-4 text-center">Recibido (Físico)</th>
-                <th className="py-3 px-4 text-center">Estado</th>
-                <th className="py-3 px-4 text-center">Precio Unitario</th>
-                <th className="py-3 px-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {filteredItems.map((item) => {
-                const status = calculateStatus(item.qtyPdf, item.qtyReceived);
-                return (
-                  <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
-                    <td className="py-3 px-4 text-center"><IndicatorDots inPdf={item.inPdf} inExcel={item.inExcel} inPhysical={item.inPhysical} /></td>
-                    <td className="py-3 px-4 font-mono font-bold text-blue-700">{item.sku}</td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-gray-800">{item.description}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{item.vehicles}</div>
-                      <div className="text-xs text-gray-400 mt-0.5 italic">{item.category}</div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyPdf} onChange={(e) => updateQtyPdf(item.id, e.target.value)} />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyReceived === null ? '' : item.qtyReceived} placeholder="0" onChange={(e) => updateQtyReceived(item.id, e.target.value)} onFocus={(e) => e.target.select()} />
-                    </td>
-                    <td className="py-3 px-4 text-center"><StatusBadge status={status} /></td>
-                    <td className="py-3 px-4 text-center">
-                      <input type="number" min="0" step="0.01" className="w-[90px] text-center border-2 border-dashed border-green-300 rounded-md px-2 py-1 font-bold text-green-700 focus:border-green-500 focus:bg-green-50 outline-none" value={item.unitPrice} onChange={(e) => updateUnitPrice(item.id, e.target.value)} onFocus={(e) => e.target.select()} placeholder="0.00" />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex gap-2 justify-center">
-                        <button 
-                          onClick={() => handleOpenSaleModal(item)}
-                          disabled={getStockForItem(item) <= 0}
-                          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
-                          title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
-                        >
-                          💰
-                        </button>
-                        <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
-                        <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full bg-white text-sm">
+                <thead className="bg-gray-800 text-white text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4 text-center">Indicadores</th>
+                    <th className="py-3 px-4 text-left">Código SKU</th>
+                    <th className="py-3 px-4 text-left">Descripción / Vehículos</th>
+                    <th className="py-3 px-4 text-center">Enviado (PDF)</th>
+                    <th className="py-3 px-4 text-center">Recibido (Físico)</th>
+                    <th className="py-3 px-4 text-center">Estado</th>
+                    <th className="py-3 px-4 text-center">Precio Unitario</th>
+                    <th className="py-3 px-4 text-center">Acciones</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="text-gray-700">
+                  {filteredItems.map((item) => {
+                    const status = calculateStatus(item.qtyPdf, item.qtyReceived);
+                    return (
+                      <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
+                        <td className="py-3 px-4 text-center"><IndicatorDots inPdf={item.inPdf} inExcel={item.inExcel} inPhysical={item.inPhysical} /></td>
+                        <td className="py-3 px-4 font-mono font-bold text-blue-700">{item.sku}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-800">{item.description}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{item.vehicles}</div>
+                          <div className="text-xs text-gray-400 mt-0.5 italic">{item.category}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyPdf} onChange={(e) => updateQtyPdf(item.id, e.target.value)} />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyReceived === null ? '' : item.qtyReceived} placeholder="0" onChange={(e) => updateQtyReceived(item.id, e.target.value)} onFocus={(e) => e.target.select()} />
+                        </td>
+                        <td className="py-3 px-4 text-center"><StatusBadge status={status} /></td>
+                        <td className="py-3 px-4 text-center">
+                          <input type="number" min="0" step="0.01" className="w-[90px] text-center border-2 border-dashed border-green-300 rounded-md px-2 py-1 font-bold text-green-700 focus:border-green-500 focus:bg-green-50 outline-none" value={item.unitPrice} onChange={(e) => updateUnitPrice(item.id, e.target.value)} onFocus={(e) => e.target.select()} placeholder="0.00" />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex gap-2 justify-center">
+                            <button 
+                              onClick={() => handleOpenSaleModal(item)}
+                              disabled={getStockForItem(item) <= 0}
+                              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
+                              title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
+                            >
+                              💰
+                            </button>
+                            <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
+                            <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
         
         {currentView === 'inventory' && filteredItems.length === 0 && (
           <div className="text-center py-12">
