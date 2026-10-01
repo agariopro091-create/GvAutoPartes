@@ -50,8 +50,25 @@ const allItems: TrackedItem[] = inventoryData.flatMap(category =>
 async function initializeFirestoreData() {
   try {
     const inventorySnapshot = await getDocs(collection(db, INVENTORY_COLLECTION));
+    const existingSkus = new Set(inventorySnapshot.docs.map(doc => doc.id));
+    
+    // Encontrar productos que faltan en Firestore
+    const missingItems = allItems.filter(item => !existingSkus.has(item.sku));
+    
+    if (missingItems.length > 0) {
+      console.log(`Sincronizando ${missingItems.length} productos nuevos con Firestore...`);
+      const batch = writeBatch(db);
+      missingItems.forEach(item => {
+        const docRef = doc(db, INVENTORY_COLLECTION, item.sku);
+        batch.set(docRef, item);
+      });
+      await batch.commit();
+      console.log('Productos sincronizados correctamente');
+    }
+    
+    // Si Firestore está completamente vacío, inicializar todo
     if (inventorySnapshot.empty) {
-      console.log('Inicializando inventario en Firestore...');
+      console.log('Inicializando inventario completo en Firestore...');
       const batch = writeBatch(db);
       allItems.forEach(item => {
         const docRef = doc(db, INVENTORY_COLLECTION, item.sku);
@@ -621,12 +638,16 @@ export default function App() {
       const now = new Date();
       const fecha = now.toLocaleDateString('es-VE');
       const hora = now.toLocaleTimeString('es-VE');
-      const totalItems = items.length;
-      const completados = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
-      const faltantes = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
-      const incompletos = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
-      const extra = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
-      const pendientes = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
+      
+      // Usar allItems para asegurar que siempre se exporten todos los productos
+      const exportItems = allItems.length > 0 ? allItems : items;
+      
+      const totalItems = exportItems.length;
+      const completados = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
+      const faltantes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
+      const incompletos = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
+      const extra = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
+      const pendientes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
 
       worksheet.mergeCells('A1:K1');
       const cellEmpresa = worksheet.getCell('A1');
@@ -660,7 +681,7 @@ export default function App() {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       });
 
-      items.forEach((item, index) => {
+      exportItems.forEach((item, index) => {
         let indicators = '';
         if (item.inPdf) indicators += '🔴 PDF ';
         if (item.inExcel) indicators += '🟢 Excel ';
@@ -701,7 +722,7 @@ export default function App() {
       });
 
       worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
-      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + items.length, column: 11 } };
+      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + exportItems.length, column: 11 } };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
