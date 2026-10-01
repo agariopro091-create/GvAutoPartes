@@ -1,9 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
 import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
 import { unitPrices } from './data/prices';
-import { db } from './firebase';
-import { buildInitialInventory, replaceInventory, type TrackedItem as FirestoreTrackedItem } from './inventory-firestore';
 import ExcelJS from 'exceljs';
 
 interface TrackedItem extends InventoryItem {
@@ -27,7 +24,10 @@ interface Sale {
   salePrice: number;
   totalPrice: number;
   date: string;
-  customer: string;
+  customerName: string;
+  customerPhone: string;
+  customerId: string;
+  notes: string;
 }
 
 const STORAGE_KEY = 'gvautopartes_inventory_data_v6';
@@ -75,7 +75,7 @@ function loadItems(): TrackedItem[] {
       return [...syncedItems, ...customItems];
     }
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error('Error loading ', error);
   }
   return allItems;
 }
@@ -85,7 +85,7 @@ function saveItems(items: TrackedItem[]) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     return true;
   } catch (error) {
-    console.error('Error saving data:', error);
+    console.error('Error saving ', error);
     return false;
   }
 }
@@ -127,9 +127,6 @@ function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel
   );
 }
 
-// ============================================
-// SISTEMA DE AUTENTICACIÓN SIMPLE
-// ============================================
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
@@ -276,15 +273,17 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cloudReadyRef = useRef(false);
-  const skipNextCloudSaveRef = useRef(false);
   
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
-  const [saleCustomer, setSaleCustomer] = useState('');
+  const [saleCustomerName, setSaleCustomerName] = useState('');
+  const [saleCustomerPhone, setSaleCustomerPhone] = useState('');
+  const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleUnitPrice, setSaleUnitPrice] = useState(0);
   const [salePrice, setSalePrice] = useState(0);
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saleNotes, setSaleNotes] = useState('');
   
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -327,9 +326,13 @@ export default function App() {
   const handleOpenSaleModal = (item: TrackedItem) => {
     setSelectedItemForSale(item);
     setSaleQuantity(1);
-    setSaleCustomer('');
+    setSaleCustomerName('');
+    setSaleCustomerPhone('');
+    setSaleCustomerId('');
     setSaleUnitPrice(item.unitPrice);
     setSalePrice(item.unitPrice);
+    setSaleDate(new Date().toISOString().split('T')[0]);
+    setSaleNotes('');
     setShowSaleModal(true);
   };
 
@@ -345,8 +348,8 @@ export default function App() {
       alert('❌ La cantidad debe ser mayor a 0');
       return;
     }
-    if (saleUnitPrice <= 0) {
-      alert('❌ El precio debe ser mayor a 0');
+    if (salePrice <= 0) {
+      alert('❌ El precio de venta debe ser mayor a 0');
       return;
     }
 
@@ -359,16 +362,23 @@ export default function App() {
       unitPrice: saleUnitPrice,
       salePrice: salePrice,
       totalPrice: saleQuantity * salePrice,
-      date: new Date().toISOString(),
-      customer: saleCustomer || 'Cliente general'
+      date: saleDate,
+      customerName: saleCustomerName || 'Cliente general',
+      customerPhone: saleCustomerPhone,
+      customerId: saleCustomerId,
+      notes: saleNotes
     };
 
     setSales(prev => [newSale, ...prev]);
     setShowSaleModal(false);
     setSelectedItemForSale(null);
     setSaleQuantity(1);
-    setSaleCustomer('');
+    setSaleCustomerName('');
+    setSaleCustomerPhone('');
+    setSaleCustomerId('');
     setSalePrice(0);
+    setSaleDate(new Date().toISOString().split('T')[0]);
+    setSaleNotes('');
     alert('✅ Venta registrada exitosamente');
   };
 
@@ -660,14 +670,17 @@ export default function App() {
       const detailSheet = workbook.addWorksheet('Detalle de Ventas');
       detailSheet.columns = [
         { header: 'Fecha', key: 'date', width: 15 },
-        { header: 'Cliente', key: 'customer', width: 25 },
+        { header: 'Cliente', key: 'customerName', width: 25 },
+        { header: 'Teléfono', key: 'customerPhone', width: 15 },
+        { header: 'Cédula', key: 'customerId', width: 15 },
         { header: 'SKU', key: 'sku', width: 18 },
         { header: 'Descripción', key: 'description', width: 40 },
         { header: 'Cantidad', key: 'quantity', width: 12 },
         { header: 'Precio Ref.', key: 'unitPrice', width: 14 },
         { header: 'Precio Venta', key: 'salePrice', width: 14 },
         { header: 'Total', key: 'totalPrice', width: 14 },
-        { header: 'Ganancia', key: 'profit', width: 14 }
+        { header: 'Ganancia', key: 'profit', width: 14 },
+        { header: 'Notas', key: 'notes', width: 30 }
       ];
 
       sales.forEach(sale => {
@@ -677,25 +690,28 @@ export default function App() {
         
         detailSheet.addRow({
           date: formattedDate,
-          customer: sale.customer,
+          customerName: sale.customerName,
+          customerPhone: sale.customerPhone,
+          customerId: sale.customerId,
           sku: sale.sku,
           description: sale.description,
           quantity: sale.quantity,
           unitPrice: sale.unitPrice,
           salePrice: sale.salePrice,
           totalPrice: sale.totalPrice,
-          profit: profit
+          profit: profit,
+          notes: sale.notes
         });
       });
 
       detailSheet.eachRow((row: ExcelJS.Row, rowNumber: number) => {
         if (rowNumber > 1) {
-          row.getCell(6).numFmt = '$#,##0.00';
-          row.getCell(7).numFmt = '$#,##0.00';
           row.getCell(8).numFmt = '$#,##0.00';
           row.getCell(9).numFmt = '$#,##0.00';
+          row.getCell(10).numFmt = '$#,##0.00';
+          row.getCell(11).numFmt = '$#,##0.00';
           
-          const profitCell = row.getCell(9);
+          const profitCell = row.getCell(11);
           const profitValue = profitCell.value as number;
           if (profitValue > 0) {
             profitCell.font = { color: { argb: 'FF059669' }, bold: true };
@@ -771,7 +787,6 @@ export default function App() {
       try {
         const data = JSON.parse(e.target?.result as string);
         
-        // Soportar formato nuevo (con version) y antiguo (array directo)
         if (data.version && data.items) {
           setItems(data.items);
           if (data.sales) setSales(data.sales);
@@ -807,10 +822,6 @@ export default function App() {
   const categories = useMemo(() => {
     return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
-
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
-  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
@@ -1073,6 +1084,8 @@ export default function App() {
                             <tr>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Fecha</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Cliente</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Teléfono</th>
+                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Cédula</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">SKU</th>
                               <th className="py-3 px-4 text-left font-semibold text-gray-700">Producto</th>
                               <th className="py-3 px-4 text-center font-semibold text-gray-700">Cant.</th>
@@ -1088,7 +1101,9 @@ export default function App() {
                                 <td className="py-3 px-4 text-gray-600">
                                   {new Date(sale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </td>
-                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customer}</td>
+                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customerName}</td>
+                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerPhone || '-'}</td>
+                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerId || '-'}</td>
                                 <td className="py-3 px-4 font-mono text-blue-700 text-xs">{sale.sku}</td>
                                 <td className="py-3 px-4 text-gray-800">{sale.description}</td>
                                 <td className="py-3 px-4 text-center font-bold">{sale.quantity}</td>
@@ -1193,7 +1208,7 @@ export default function App() {
 
         {showEditSaleModal && editingSale && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
                 <h2 className="text-xl font-bold">✏️ Editar Venta</h2>
               </div>
@@ -1201,18 +1216,46 @@ export default function App() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="font-mono text-sm text-blue-700 font-bold">{editingSale.sku}</div>
                   <div className="text-gray-800 mt-1">{editingSale.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Fecha original: {new Date(editingSale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
                   <input
-                    type="text"
-                    value={editingSale.customer}
-                    onChange={(e) => setEditingSale({...editingSale, customer: e.target.value})}
+                    type="date"
+                    value={editingSale.date.split('T')[0]}
+                    onChange={(e) => setEditingSale({...editingSale, date: new Date(e.target.value).toISOString()})}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
+                  <input
+                    type="text"
+                    value={editingSale.customerName}
+                    onChange={(e) => setEditingSale({...editingSale, customerName: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
+                    <input
+                      type="tel"
+                      value={editingSale.customerPhone}
+                      onChange={(e) => setEditingSale({...editingSale, customerPhone: e.target.value})}
+                      placeholder="0414-1234567"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
+                    <input
+                      type="text"
+                      value={editingSale.customerId}
+                      onChange={(e) => setEditingSale({...editingSale, customerId: e.target.value})}
+                      placeholder="V-12345678"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
@@ -1248,6 +1291,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
+                  <textarea
+                    value={editingSale.notes}
+                    onChange={(e) => setEditingSale({...editingSale, notes: e.target.value})}
+                    placeholder="Devolución, cambio, observaciones..."
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none resize-none"
+                  />
+                </div>
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-gray-700">Total Actualizado:</span>
@@ -1265,7 +1318,7 @@ export default function App() {
 
         {showSaleModal && selectedItemForSale && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-t-xl">
                 <h2 className="text-xl font-bold">💰 Registrar Venta</h2>
               </div>
@@ -1280,14 +1333,45 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
                   <input
-                    type="text"
-                    value={saleCustomer}
-                    onChange={(e) => setSaleCustomer(e.target.value)}
-                    placeholder="Nombre del cliente"
+                    type="date"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
+                  <input
+                    type="text"
+                    value={saleCustomerName}
+                    onChange={(e) => setSaleCustomerName(e.target.value)}
+                    placeholder="Nombre completo"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
+                    <input
+                      type="tel"
+                      value={saleCustomerPhone}
+                      onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                      placeholder="0414-1234567"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
+                    <input
+                      type="text"
+                      value={saleCustomerId}
+                      onChange={(e) => setSaleCustomerId(e.target.value)}
+                      placeholder="V-12345678"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
@@ -1331,6 +1415,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
+                  <textarea
+                    value={saleNotes}
+                    onChange={(e) => setSaleNotes(e.target.value)}
+                    placeholder="Observaciones adicionales..."
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none resize-none"
+                  />
+                </div>
                 <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-gray-700">Total de la Venta:</span>
@@ -1357,8 +1451,12 @@ export default function App() {
                       setShowSaleModal(false);
                       setSelectedItemForSale(null);
                       setSaleQuantity(1);
-                      setSaleCustomer('');
+                      setSaleCustomerName('');
+                      setSaleCustomerPhone('');
+                      setSaleCustomerId('');
                       setSalePrice(0);
+                      setSaleDate(new Date().toISOString().split('T')[0]);
+                      setSaleNotes('');
                     }}
                     className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
                   >
