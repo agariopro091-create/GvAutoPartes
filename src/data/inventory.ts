@@ -378,5 +378,30 @@ export const inventoryData: Category[] = [
       { sku: "ART-014908", description: "Mobil Special Alto Kilometraje 25W50 CAJA 12x0.95L", vehicles: "Vehículos con más de 100,000 km que requieran aceite de mayor viscosidad SAE 25W-50", qtyPdf: 12, qtyPhysical: 12, status: "ok", category: "Aceites de Motor" },
       { sku: "ART-014964", description: "Lubrex Mineral Velocity Nano SAE 15W40 SM/CF CAJA 12x1LT", vehicles: "Motores a gasolina o diésel que requieran aceite mineral de viscosidad SAE 15W-40 API SM/CF", qtyPdf: 12, qtyPhysical: 12, status: "ok", category: "Aceites de Motor" },
     ]
+  },
+  {
+    id: 15,
+    name: "Productos Flamingo",
+    items: [
+      { sku: "F353", description: "Abrillantador de Caucho en Gel", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F095", description: "Aditivo Eliminador de Humo", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F108", description: "Lubricante para Cadena de Motos", vehicles: "Motos (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F163", description: "Limpiador del Sistema Catalítico", vehicles: "Universal (Flamingo)", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Productos Flamingo" },
+      { sku: "F116L", description: "Ultra Shine/Cera Protectora Moto", vehicles: "Motos (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F037", description: "Aditivo Limpiador de Radiador", vehicles: "Universal (Flamingo)", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Productos Flamingo" },
+      { sku: "F038", description: "Aditivo Anti Oxido Radiador", vehicles: "Universal (Flamingo)", qtyPdf: 4, qtyPhysical: 4, status: "ok", category: "Productos Flamingo" },
+      { sku: "F004E", description: "Silicon Abrillantador Tablero", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F091", description: "Cera Recubrimiento Cerámico", vehicles: "Universal (Flamingo)", qtyPdf: 2, qtyPhysical: 2, status: "ok", category: "Productos Flamingo" },
+      { sku: "F003", description: "Limpia Cauchos en Espuma 650 ml", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F005", description: "Limpia Carburador Spray 450 ml", vehicles: "Universal (Flamingo)", qtyPdf: 12, qtyPhysical: 12, status: "ok", category: "Productos Flamingo" },
+      { sku: "F002", description: "Limpia Tapicería en Espuma 650 ml", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F104V", description: "Protector en Crema Olor Lavanda", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F104S", description: "Protector en Crema Olor Fresa", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F055", description: "Aditivo Octane Booster 354ml", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F065", description: "De-Rust Lubricante (WD-40)", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F058", description: "Limpia Contacto Spray 450 ml", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F351", description: "Shampoo con Cera para Carros", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+      { sku: "F139L", description: "Eliminador de Olor / Quick Fresh", vehicles: "Universal (Flamingo)", qtyPdf: 6, qtyPhysical: 6, status: "ok", category: "Productos Flamingo" },
+    ]
   }
 ];
