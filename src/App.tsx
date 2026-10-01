@@ -419,10 +419,26 @@ export default function App() {
     return sales.reduce((sum, sale) => sum + ((sale.salePrice - sale.unitPrice) * sale.quantity), 0);
   }, [sales]);
 
-  const lowStockItems = useMemo(() => {
+  const frequentSalesItems = useMemo(() => {
+    // Productos que se han vendido al menos 2 veces
+    const salesCount: Record<string, number> = {};
+    sales.forEach(sale => {
+      salesCount[sale.sku] = (salesCount[sale.sku] || 0) + 1;
+    });
+    
+    return items
+      .filter(item => salesCount[item.sku] >= 2)
+      .map(item => ({
+        ...item,
+        salesCount: salesCount[item.sku] || 0
+      }))
+      .sort((a, b) => b.salesCount - a.salesCount);
+  }, [items, sales]);
+
+  const outOfStockItems = useMemo(() => {
     return items.filter(item => {
       const stock = getStockForItem(item);
-      return stock > 0 && stock < 5;
+      return stock === 0 && item.qtyReceived !== null && item.qtyReceived > 0;
     });
   }, [items, sales]);
 
@@ -721,21 +737,36 @@ export default function App() {
         }
       });
 
-      const stockSheet = workbook.addWorksheet('Stock Bajo');
+      const stockSheet = workbook.addWorksheet('Alertas de Stock');
       stockSheet.columns = [
         { header: 'SKU', key: 'sku', width: 18 },
         { header: 'Descripción', key: 'description', width: 40 },
         { header: 'Stock Actual', key: 'stock', width: 15 },
+        { header: 'Ventas Realizadas', key: 'salesCount', width: 18 },
         { header: 'Estado', key: 'status', width: 20 }
       ];
 
-      lowStockItems.forEach(item => {
+      // Productos sin stock
+      outOfStockItems.forEach((item: TrackedItem) => {
+        const salesCount = sales.filter(s => s.sku === item.sku).length;
+        stockSheet.addRow({
+          sku: item.sku,
+          description: item.description,
+          stock: 0,
+          salesCount: salesCount,
+          status: '❌ Sin Stock'
+        });
+      });
+
+      // Productos con ventas frecuentes
+      frequentSalesItems.forEach((item: any) => {
         const stock = getStockForItem(item);
         stockSheet.addRow({
           sku: item.sku,
           description: item.description,
           stock: stock,
-          status: stock === 0 ? '❌ Sin Stock' : '⚠️ Stock Bajo'
+          salesCount: item.salesCount,
+          status: '🔥 Ventas Frecuentes'
         });
       });
 
@@ -931,8 +962,8 @@ export default function App() {
               <div className="text-sm text-gray-600 mt-1">📅 Meses con Ventas</div>
             </div>
             <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
-              <div className="text-3xl font-bold text-orange-600">{lowStockItems.length}</div>
-              <div className="text-sm text-gray-600 mt-1">⚠️ Stock Bajo</div>
+              <div className="text-3xl font-bold text-orange-600">{frequentSalesItems.length}</div>
+              <div className="text-sm text-gray-600 mt-1">🔥 Ventas Frecuentes</div>
             </div>
           </div>
         )}
@@ -1043,18 +1074,40 @@ export default function App() {
 
         {currentView === 'sales' && (
           <>
-            {lowStockItems.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-bold text-orange-800 mb-3">⚠️ Alerta de Stock Bajo</h3>
+            {/* Alerta de Productos Sin Stock */}
+            {outOfStockItems.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-bold text-red-800 mb-3">❌ Alerta de Productos Sin Stock</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {lowStockItems.map(item => {
+                  {outOfStockItems.map((item: TrackedItem) => {
+                    const salesCount = sales.filter(s => s.sku === item.sku).length;
+                    return (
+                      <div key={item.id} className="bg-white rounded-lg p-3 border border-red-300">
+                        <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
+                        <div className="text-sm text-gray-800 mt-1">{item.description}</div>
+                        <div className="text-xs text-red-600 font-bold mt-2">
+                          ❌ Sin Stock | 🔥 {salesCount} ventas realizadas
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Ventas Frecuentes */}
+            {frequentSalesItems.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-bold text-orange-800 mb-3">🔥 Ventas Frecuentes</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {frequentSalesItems.map((item: any) => {
                     const stock = getStockForItem(item);
                     return (
                       <div key={item.id} className="bg-white rounded-lg p-3 border border-orange-300">
                         <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
                         <div className="text-sm text-gray-800 mt-1">{item.description}</div>
                         <div className="text-xs text-orange-600 font-bold mt-2">
-                          Stock: {stock} {stock === 0 ? '❌' : '⚠️'}
+                          🔥 {item.salesCount} ventas | Stock: {stock}
                         </div>
                       </div>
                     );
