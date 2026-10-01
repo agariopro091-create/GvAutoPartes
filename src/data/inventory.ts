@@ -128,10 +128,10 @@ export const inventoryData: Category[] = [
       { sku: "11AY031013Y", description: "Set de Cables con Disipador Metálico", vehicles: "CHEVROLET SILVERADO CORTO", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY062043V", description: "Cables Bujía", vehicles: "FORD FIESTA MOVE / KA / ECOSPORT 4CIL 1.6 (09/12, 01/08)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY052043V", description: "Cables Bujía 4CIL 1.6 09/12 01/08", vehicles: "FORD FIESTA MOVE / KA / ECOSPORT", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
-      { sku: "11CR052009N", description: "Cable Racing Silicon 8.8mm 4CIL 1.6L", vehicles: "FORD FIESTA / KA", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY031019N", description: "Cable Bujía", vehicles: "CHEVROLET SPARK 4CIL 1.0L (06/08) 8V", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY094068S", description: "Cables Bujía", vehicles: "JEEP CHEROKEE KK 3.7 (08-15)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
       { sku: "11AY030002N", description: "Cables Bujía", vehicles: "CHERY ORINOCO 4CIL 1.8 (11/13) 16V", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
+      { sku: "11CR052009N", description: "Cable Racing Silicon 8.8mm 4CIL 1.6L", vehicles: "FORD FIESTA / KA", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Cables de Bujías" },
     ]
   },
   {
@@ -320,6 +320,7 @@ export const inventoryData: Category[] = [
       { sku: "17801-21030-D", description: "Filtro Aire Motor", vehicles: "TOYOTA YARIS SOL 1.3 00-05", qtyPdf: 1, qtyPhysical: 0, status: "missing", category: "Filtros de Aire" },
       { sku: "17801-21050-D", description: "Filtro Aire Motor", vehicles: "TOYOTA YARIS SPORT BELTA 1.5 06-12 / TOYOTA COROLLA 1.8 09-14", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
       { sku: "7701045724-W", description: "Filtro Aire Motor", vehicles: "RENAULT CLIO / RENAULT SYMBOL / RENAULT MEGANE / RENAULT KANGOO (CÓDIGO CORREGIDO, FALTABA EL 4)", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
+      { sku: "28113-22001-W", description: "Filtro Aire Motor", vehicles: "HYUNDAI ACCENT 1.3", qtyPdf: 1, qtyPhysical: 1, status: "ok", category: "Filtros de Aire" },
     ]
   },
   {
