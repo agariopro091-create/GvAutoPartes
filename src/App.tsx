@@ -185,6 +185,8 @@ export default function App() {
   const [saleNotes, setSaleNotes] = useState('');
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
   useEffect(() => {
     saveItems(items);
@@ -281,6 +283,25 @@ export default function App() {
   const handleCancelSale = (saleId: string) => {
     if (confirm('¿Estás seguro de cancelar esta venta?')) {
       setSales(prev => prev.filter(s => s.id !== saleId));
+    }
+  };
+
+  // Funciones de edición de productos
+  const handleEditItem = (item: TrackedItem) => {
+    setEditingItem(item);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingItem) return;
+    setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
+    setShowEditModal(false);
+    setEditingItem(null);
+  };
+
+  const handleDeleteItem = (id: string, sku: string) => {
+    if (confirm(`¿Estás seguro de eliminar "${sku}"?`)) {
+      setItems(prev => prev.filter(item => item.id !== id));
     }
   };
 
@@ -678,13 +699,30 @@ export default function App() {
                           <StatusBadge status={calculateStatus(item.qtyPdf, item.qtyReceived)} />
                         </td>
                         <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <button
-                            onClick={() => handleOpenSaleModal(item)}
-                            disabled={getStockForItem(item) <= 0}
-                            className="px-2 sm:px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs sm:text-sm font-medium transition-colors"
-                          >
-                            💰 Vender
-                          </button>
+                          <div className="flex gap-1 justify-center flex-wrap">
+                            <button
+                              onClick={() => handleOpenSaleModal(item)}
+                              disabled={getStockForItem(item) <= 0}
+                              className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                              title="Vender"
+                            >
+                              💰
+                            </button>
+                            <button
+                              onClick={() => handleEditItem(item)}
+                              className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium transition-colors"
+                              title="Editar"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(item.id, item.sku)}
+                              className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition-colors"
+                              title="Eliminar"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1099,6 +1137,109 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setShowEditSaleModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">✏️ Editar Producto</h2>
+            </div>
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">SKU</label>
+                <input
+                  type="text"
+                  value={editingItem.sku}
+                  onChange={(e) => setEditingItem({ ...editingItem, sku: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Descripción</label>
+                <input
+                  type="text"
+                  value={editingItem.description}
+                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Vehículos Compatibles</label>
+                <textarea
+                  value={editingItem.vehicles}
+                  onChange={(e) => setEditingItem({ ...editingItem, vehicles: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Categoría</label>
+                <input
+                  type="text"
+                  value={editingItem.category}
+                  onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad PDF</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editingItem.qtyPdf}
+                    onChange={(e) => setEditingItem({ ...editingItem, qtyPdf: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad Física</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editingItem.qtyReceived || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editingItem.unitPrice}
+                  onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="flex gap-2 sm:gap-3">
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-blue-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  💾 Guardar
+                </button>
+                <button
+                  onClick={() => setShowEditModal(false)}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
                   ❌ Cancelar
