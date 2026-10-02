@@ -187,6 +187,19 @@ export default function App() {
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItem, setNewItem] = useState({
+    sku: '',
+    description: '',
+    vehicles: '',
+    category: '',
+    newCategory: '',
+    qtyPdf: 0,
+    qtyReceived: null as number | null,
+    inPdf: true,
+    inExcel: true,
+    inPhysical: false
+  });
 
   useEffect(() => {
     saveItems(items);
@@ -303,6 +316,38 @@ export default function App() {
     if (confirm(`¿Estás seguro de eliminar "${sku}"?`)) {
       setItems(prev => prev.filter(item => item.id !== id));
     }
+  };
+
+  const handleAddItem = () => {
+    if (!newItem.sku.trim() || !newItem.description.trim()) {
+      alert('❌ SKU y descripción son obligatorios');
+      return;
+    }
+    const category = newItem.newCategory.trim() || newItem.category;
+    if (!category) {
+      alert('❌ Debes seleccionar o crear una categoría');
+      return;
+    }
+    
+    const newItemData: TrackedItem = {
+      id: `custom-${Date.now()}`,
+      sku: newItem.sku.trim(),
+      description: newItem.description.trim(),
+      vehicles: newItem.vehicles.trim(),
+      category: category,
+      categoryId: 999,
+      qtyPdf: newItem.qtyPdf,
+      qtyReceived: newItem.qtyReceived,
+      status: calculateStatus(newItem.qtyPdf, newItem.qtyReceived),
+      inPdf: newItem.inPdf,
+      inExcel: newItem.inExcel,
+      inPhysical: newItem.inPhysical,
+      unitPrice: 0
+    };
+    
+    setItems(prev => [...prev, newItemData]);
+    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
+    setShowAddModal(false);
   };
 
   // Estadísticas
@@ -783,6 +828,9 @@ export default function App() {
                 📂 Cargar Respaldo
                 <input type="file" accept=".json" onChange={importJSON} className="hidden" />
               </label>
+              <button onClick={() => setShowAddModal(true)} className="px-3 sm:px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm transition-colors">
+                ➕ Agregar
+              </button>
               <button onClick={resetData} className="px-3 sm:px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm transition-colors">
                 🔄 Resetear
               </button>
@@ -1280,6 +1328,118 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setShowEditSaleModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Product Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">➕ Agregar Nuevo Producto</h2>
+            </div>
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">SKU *</label>
+                <input
+                  type="text"
+                  value={newItem.sku}
+                  onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
+                  placeholder="Ej: BUJ-001"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
+                <input
+                  type="text"
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  placeholder="Ej: Bujía NGK BKR6E-11"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Vehículos Compatibles</label>
+                <textarea
+                  value={newItem.vehicles}
+                  onChange={(e) => setNewItem({ ...newItem, vehicles: e.target.value })}
+                  placeholder="Ej: Toyota Corolla, Honda Civic"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Categoría *</label>
+                <select
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                >
+                  <option value="">Seleccionar categoría existente...</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">O crear nueva categoría</label>
+                <input
+                  type="text"
+                  value={newItem.newCategory}
+                  onChange={(e) => setNewItem({ ...newItem, newCategory: e.target.value })}
+                  placeholder="Ej: Frenos"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad PDF</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyPdf}
+                    onChange={(e) => setNewItem({ ...newItem, qtyPdf: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad Física</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyReceived === null ? '' : newItem.qtyReceived}
+                    onChange={(e) => setNewItem({ ...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:gap-3 pt-2">
+                <button
+                  onClick={handleAddItem}
+                  className="flex-1 bg-emerald-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-emerald-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ✅ Agregar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
+                  }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
                   ❌ Cancelar
