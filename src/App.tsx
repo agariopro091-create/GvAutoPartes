@@ -167,7 +167,12 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (login(password)) {
-      onLogin();
+      setPassword('');
+      setError('');
+      // Forzar re-render para que la app se muestre inmediatamente
+      setTimeout(() => {
+        onLogin();
+      }, 100);
     } else {
       setError('Contraseña incorrecta');
       setTimeout(() => setError(''), 3000);
@@ -223,7 +228,10 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>
             )}
             <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors">🔓 Iniciar Sesión</button>
-            <button type="button" onClick={() => setShowChangePassword(true)} className="w-full text-gray-500 hover:text-gray-700 text-sm underline">¿Cambiar contraseña?</button>
+            {/* Botón de cambiar contraseña oculto temporalmente */}
+            <div className="hidden">
+              <button type="button" onClick={() => setShowChangePassword(true)} className="w-full text-gray-500 hover:text-gray-700 text-sm underline">¿Cambiar contraseña?</button>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleChangePassword} className="space-y-4">
