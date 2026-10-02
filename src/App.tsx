@@ -399,12 +399,15 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Exportar ventas a Excel (CORREGIDO)
+  // Exportar ventas a Excel (MEJORADO)
   const exportSalesToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Ventas');
+    workbook.creator = 'GvAutoPartes';
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Ventas', { properties: { defaultRowHeight: 20 } });
 
     worksheet.columns = [
+      { header: 'N°', key: 'num', width: 6 },
       { header: 'Fecha', key: 'date', width: 12 },
       { header: 'Cliente', key: 'customerName', width: 20 },
       { header: 'Teléfono', key: 'customerPhone', width: 15 },
@@ -419,12 +422,95 @@ export default function App() {
       { header: 'Notas', key: 'notes', width: 25 },
     ];
 
-    sales.forEach(sale => {
+    // Encabezado profesional
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-VE');
+    const hora = now.toLocaleTimeString('es-VE');
+    const totalVentas = sales.length;
+    const montoTotal = sales.reduce((sum, s) => sum + s.totalPrice, 0);
+    const gananciaTotal = sales.reduce((sum, s) => sum + ((s.salePrice - s.unitPrice) * s.quantity), 0);
+
+    // Fila 1: Nombre de la empresa
+    worksheet.mergeCells('A1:M1');
+    const cellEmpresa = worksheet.getCell('A1');
+    cellEmpresa.value = 'GvAutoPartes';
+    cellEmpresa.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FF1E3A8A' } };
+    cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(1).height = 30;
+
+    // Fila 2: Título del reporte
+    worksheet.mergeCells('A2:M2');
+    const cellTitulo = worksheet.getCell('A2');
+    cellTitulo.value = 'Reporte de Ventas';
+    cellTitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
+    cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(2).height = 25;
+
+    // Fila 3: Metadatos
+    worksheet.mergeCells('A3:G3');
+    worksheet.getCell('A3').value = `Fecha de Exportación: ${fecha} ${hora}`;
+    worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
+    worksheet.getCell('A3').alignment = { horizontal: 'left' };
+
+    worksheet.mergeCells('H3:M3');
+    worksheet.getCell('H3').value = `Total de Ventas: ${totalVentas}`;
+    worksheet.getCell('H3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    worksheet.getCell('H3').alignment = { horizontal: 'right' };
+    worksheet.getRow(3).height = 20;
+
+    // Fila 4: Resumen financiero
+    worksheet.mergeCells('A4:M4');
+    const cellResumen = worksheet.getCell('A4');
+    cellResumen.value = `💰 Monto Total: $${montoTotal.toFixed(2)} | 📈 Ganancia Total: $${gananciaTotal.toFixed(2)}`;
+    cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF059669' } };
+    cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+    worksheet.getRow(4).height = 25;
+
+    // Fila 5: Espacio
+    worksheet.getRow(5).height = 8;
+
+    // Fila 6: Encabezados de tabla
+    const headerRowNum = 6;
+    const headerRow = worksheet.getRow(headerRowNum);
+    headerRow.eachCell((cell: any) => {
+      cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+      };
+    });
+    headerRow.height = 25;
+
+    // Agregar datos de ventas
+    sales.forEach((sale, index) => {
       const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
-      const dateObj = new Date(sale.date);
-      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
       
-      worksheet.addRow({
+      // CORRECCIÓN DE FECHA: Parsear correctamente la fecha
+      let formattedDate = '';
+      if (sale.date) {
+        // Si la fecha está en formato YYYY-MM-DD
+        if (sale.date.includes('-')) {
+          const [year, month, day] = sale.date.split('-');
+          formattedDate = `${day}/${month}/${year}`;
+        } else {
+          // Si es un timestamp ISO completo
+          const dateObj = new Date(sale.date);
+          if (!isNaN(dateObj.getTime())) {
+            const day = dateObj.getDate().toString().padStart(2, '0');
+            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const year = dateObj.getFullYear();
+            formattedDate = `${day}/${month}/${year}`;
+          }
+        }
+      }
+      
+      const row = worksheet.addRow({
+        num: index + 1,
         date: formattedDate,
         customerName: sale.customerName,
         customerPhone: sale.customerPhone || '',
@@ -438,23 +524,80 @@ export default function App() {
         profit: profit,
         notes: sale.notes || '',
       });
-    });
 
-    // Formato de moneda
-    worksheet.columns.slice(7, 11).forEach((col: any) => {
-      col.eachCell?.({ includeEmpty: false }, (cell: any) => {
-        if (cell.row > 1) {
+      // Estilo de las filas (efecto cebra)
+      const isEven = index % 2 === 0;
+      row.eachCell((cell: any, colNumber: number) => {
+        cell.font = { name: 'Arial', size: 10, color: { argb: 'FF333333' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF3F4F6' }
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+        };
+
+        // Alineaciones específicas por columna
+        if (colNumber === 1) { // N°
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 2) { // Fecha
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 7) { // Descripción
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else if (colNumber === 8) { // Cantidad
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber >= 9 && colNumber <= 12) { // Precios y ganancia
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
           cell.numFmt = '$#,##0.00';
+          
+          // Colorear ganancia
+          if (colNumber === 12) {
+            const profitValue = cell.value as number;
+            if (profitValue > 0) {
+              cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' }, bold: true };
+            } else if (profitValue < 0) {
+              cell.font = { name: 'Arial', size: 10, color: { argb: 'FFDC2626' }, bold: true };
+            }
+          }
+        } else if (colNumber === 13) { // Notas
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
         }
       });
+
+      row.height = 20;
     });
+
+    // Congelar paneles (congelar encabezados)
+    worksheet.views = [
+      { state: 'frozen', ySplit: headerRowNum, xSplit: 0 }
+    ];
+
+    // Activar autofiltros
+    worksheet.autoFilter = {
+      from: { row: headerRowNum, column: 1 },
+      to: { row: headerRowNum + sales.length, column: 13 }
+    };
+
+    // Pie de página
+    const footerRowNum = headerRowNum + sales.length + 2;
+    worksheet.mergeCells(`A${footerRowNum}:M${footerRowNum}`);
+    const cellFooter = worksheet.getCell(`A${footerRowNum}`);
+    cellFooter.value = 'Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A.';
+    cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
+    cellFooter.alignment = { horizontal: 'center', vertical: 'middle' };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Ventas_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
+    a.download = `Ventas_GvAutoPartes_${fecha.replace(/\//g, '-')}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -774,13 +917,12 @@ export default function App() {
             )}
 
             {frequentSalesItems.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 sm:p-4 mb-4">
-                <h3 className="text-base sm:text-lg font-bold text-orange-800 mb-2">🔥 Ventas Frecuentes</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                  {frequentSalesItems.slice(0, 6).map(item => (
-                    <div key={item.id} className="bg-white rounded p-2 sm:p-3 border border-orange-300">
-                      <div className="font-mono text-xs sm:text-sm text-blue-700 font-bold">{item.sku}</div>
-                      <div className="text-xs sm:text-sm text-gray-800 mt-1">{item.description}</div>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 sm:p-3 mb-4">
+                <h3 className="text-sm sm:text-base font-bold text-orange-800 mb-2">🔥 Ventas Frecuentes</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {frequentSalesItems.slice(0, 8).map(item => (
+                    <div key={item.id} className="bg-white rounded p-2 border border-orange-300">
+                      <div className="font-mono text-xs text-blue-700 font-bold truncate">{item.sku}</div>
                       <div className="text-xs text-orange-600 font-bold mt-1">🔥 {item.salesCount} ventas</div>
                     </div>
                   ))}
