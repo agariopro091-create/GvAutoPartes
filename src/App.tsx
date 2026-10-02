@@ -1,17 +1,23 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { inventoryData, type InventoryItem, type ItemStatus } from './data/inventory';
+import { useState, useMemo, useEffect } from 'react';
+import { inventoryData } from './data/inventory';
 import { unitPrices } from './data/prices';
 import ExcelJS from 'exceljs';
 
-interface TrackedItem extends InventoryItem {
+// Tipos
+interface TrackedItem {
   id: string;
+  sku: string;
+  description: string;
+  vehicles: string;
+  category: string;
   categoryId: number;
-  inPdf: boolean;
-  inExcel: boolean;
-  inPhysical: boolean;
   qtyPdf: number;
   qtyReceived: number | null;
   unitPrice: number;
+  status: 'ok' | 'missing' | 'partial' | 'pending' | 'extra';
+  inPdf: boolean;
+  inExcel: boolean;
+  inPhysical: boolean;
 }
 
 interface Sale {
@@ -30,233 +36,127 @@ interface Sale {
   notes: string;
 }
 
+// Constantes
 const STORAGE_KEY = 'gvautopartes_inventory_data_v6';
 const SALES_KEY = 'gvautopartes_sales_data_v6';
-
-const allItems: TrackedItem[] = inventoryData.flatMap(category => 
-  category.items.map((item, idx) => ({
-    ...item,
-    id: `${category.id}-${idx}`,
-    categoryId: category.id,
-    inPdf: true,
-    inExcel: true,
-    inPhysical: false,
-    qtyPdf: item.qtyPdf,
-    qtyReceived: item.qtyPhysical,
-    unitPrice: unitPrices[item.sku] || 0
-  }))
-);
-
-function loadItems(): TrackedItem[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const savedItems: TrackedItem[] = JSON.parse(saved);
-      const savedMap = new Map(savedItems.map(item => [item.sku, item]));
-      
-      const syncedItems = allItems.map(originalItem => {
-        const savedItem = savedMap.get(originalItem.sku);
-        if (savedItem) {
-          return {
-            ...originalItem,
-            qtyReceived: savedItem.qtyReceived,
-            unitPrice: savedItem.unitPrice !== undefined ? savedItem.unitPrice : originalItem.unitPrice,
-            inPdf: savedItem.inPdf !== undefined ? savedItem.inPdf : originalItem.inPdf,
-            inExcel: savedItem.inExcel !== undefined ? savedItem.inExcel : originalItem.inExcel,
-            inPhysical: savedItem.inPhysical !== undefined ? savedItem.inPhysical : originalItem.inPhysical,
-          };
-        }
-        return originalItem;
-      });
-      
-      const originalSkus = new Set(allItems.map(item => item.sku));
-      const customItems = savedItems.filter(item => !originalSkus.has(item.sku));
-      
-      return [...syncedItems, ...customItems];
-    }
-  } catch (error) {
-    console.error('Error loading ', error);
-  }
-  return allItems;
-}
-
-function saveItems(items: TrackedItem[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    return true;
-  } catch (error) {
-    console.error('Error saving ', error);
-    return false;
-  }
-}
-
-function calculateStatus(qtyPdf: number, qtyReceived: number | null): ItemStatus {
-  if (qtyReceived === null || qtyReceived === undefined) return 'pending';
-  if (qtyReceived === 0) return 'missing';
-  if (qtyReceived < qtyPdf) return 'partial';
-  if (qtyReceived === qtyPdf) return 'ok';
-  if (qtyReceived > qtyPdf) return 'extra';
-  return 'pending';
-}
-
-function normalizeText(text: string): string {
-  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function StatusBadge({ status }: { status: ItemStatus }) {
-  const config: Record<ItemStatus, { label: string; className: string }> = {
-    pending: { label: '⏳ Pendiente', className: 'bg-gray-200 text-gray-700' },
-    ok: { label: '✅ Completo', className: 'bg-green-200 text-green-800' },
-    missing: { label: '❌ No Vino', className: 'bg-red-200 text-red-800' },
-    partial: { label: '⚠️ Faltan', className: 'bg-yellow-200 text-yellow-800' },
-    extra: { label: '⭐ Extra', className: 'bg-blue-200 text-blue-800' }
-  };
-  
-  const { label, className } = config[status];
-  return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${className}`}>{label}</span>;
-}
-
-function IndicatorDots({ inPdf, inExcel, inPhysical }: { inPdf: boolean; inExcel: boolean; inPhysical: boolean }) {
-  return (
-    <div className="flex items-center justify-center gap-1">
-      {inPdf && <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.5)] border border-red-600" title="En Despacho PDF"></div>}
-      {inExcel && <div className="w-3.5 h-3.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.5)] border border-green-600" title="En Catálogo Excel"></div>}
-      {inPhysical && <div className="w-3.5 h-3.5 rounded-full bg-purple-500 shadow-[0_0_4px_rgba(168,85,247,0.5)] border border-purple-600" title="Físico No en Lista"></div>}
-      {!inPdf && !inExcel && !inPhysical && <span className="text-gray-400 text-xs">N/A</span>}
-    </div>
-  );
-}
-
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
-function checkAuth(): boolean {
-  return localStorage.getItem(AUTH_KEY) === 'authenticated';
-}
-
-function login(password: string): boolean {
-  const savedPassword = localStorage.getItem('gvautopartes_password') || DEFAULT_PASSWORD;
-  if (password === savedPassword) {
+// Funciones de autenticación
+const checkAuth = (): boolean => localStorage.getItem(AUTH_KEY) === 'authenticated';
+const login = (password: string): boolean => {
+  if (password === DEFAULT_PASSWORD) {
     localStorage.setItem(AUTH_KEY, 'authenticated');
     return true;
   }
   return false;
-}
+};
+const logout = () => localStorage.removeItem(AUTH_KEY);
 
-function logout() {
-  localStorage.removeItem(AUTH_KEY);
-}
-
-function changePassword(oldPassword: string, newPassword: string): boolean {
-  const savedPassword = localStorage.getItem('gvautopartes_password') || DEFAULT_PASSWORD;
-  if (oldPassword === savedPassword) {
-    localStorage.setItem('gvautopartes_password', newPassword);
-    return true;
+// Funciones de almacenamiento
+const loadItems = (): TrackedItem[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
   }
-  return false;
-}
+};
 
+const saveItems = (items: TrackedItem[]) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+};
+
+const loadSales = (): Sale[] => {
+  try {
+    const saved = localStorage.getItem(SALES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveSales = (sales: Sale[]) => {
+  localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+};
+
+// Inicializar datos
+const initializeItems = (): TrackedItem[] => {
+  const saved = loadItems();
+  if (saved.length > 0) return saved;
+
+  const items: TrackedItem[] = [];
+  inventoryData.forEach((category) => {
+    category.items.forEach((item, idx) => {
+      items.push({
+        id: `${category.id}-${idx}`,
+        sku: item.sku,
+        description: item.description,
+        vehicles: item.vehicles,
+        category: category.name,
+        categoryId: category.id,
+        qtyPdf: item.qtyPdf,
+        qtyReceived: item.qtyPhysical,
+        unitPrice: unitPrices[item.sku] || 0,
+        status: item.status,
+        inPdf: true,
+        inExcel: true,
+        inPhysical: false,
+      });
+    });
+  });
+  saveItems(items);
+  return items;
+};
+
+// Componente de Login
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [oldPass, setOldPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (login(password)) {
       setPassword('');
       setError('');
-      // Forzar re-render para que la app se muestre inmediatamente
-      setTimeout(() => {
-        onLogin();
-      }, 100);
+      setTimeout(() => onLogin(), 100);
     } else {
       setError('Contraseña incorrecta');
       setTimeout(() => setError(''), 3000);
     }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPass !== confirmPass) {
-      setError('Las contraseñas nuevas no coinciden');
-      return;
-    }
-    if (newPass.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
-    if (changePassword(oldPass, newPass)) {
-      alert('✅ Contraseña cambiada exitosamente');
-      setShowChangePassword(false);
-      setOldPass('');
-      setNewPass('');
-      setConfirmPass('');
-      setError('');
-    } else {
-      setError('La contraseña actual es incorrecta');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🔐</div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">GvAutoPartes</h1>
-          <p className="text-gray-500">Sistema de Inventario Privado</p>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🔐</div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">GvAutoPartes</h1>
+          <p className="text-sm sm:text-base text-gray-500">Sistema de Inventario Privado</p>
           <p className="text-xs text-gray-400 mt-2">Proveedor: Guzimport, C.A.</p>
         </div>
 
-        {!showChangePassword ? (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-                placeholder="Ingresa tu contraseña"
-                autoFocus
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>
-            )}
-            <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors">🔓 Iniciar Sesión</button>
-            {/* Botón de cambiar contraseña oculto temporalmente */}
-            <div className="hidden">
-              <button type="button" onClick={() => setShowChangePassword(true)} className="w-full text-gray-500 hover:text-gray-700 text-sm underline">¿Cambiar contraseña?</button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Cambiar Contraseña</h2>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña Actual</label>
-              <input type="password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Nueva Contraseña</label>
-              <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required minLength={6} />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Confirmar Nueva Contraseña</label>
-              <input type="password" value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none" required minLength={6} />
-            </div>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>}
-            <div className="flex gap-3">
-              <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold">💾 Guardar</button>
-              <button type="button" onClick={() => { setShowChangePassword(false); setError(''); }} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 font-semibold">❌ Cancelar</button>
-            </div>
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-base"
+              placeholder="Ingresa tu contraseña"
+              autoFocus
+            />
+          </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">❌ {error}</div>
+          )}
+          <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors text-base">
+            🔓 Iniciar Sesión
+          </button>
+        </form>
 
-        <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+        <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-400">Documento: 80010868 | Proveedor: Guzimport, C.A.</p>
         </div>
       </div>
@@ -264,24 +164,15 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// Componente principal
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
-  const [items, setItems] = useState<TrackedItem[]>(loadItems);
-  const [sales, setSales] = useState<Sale[]>(() => {
-    try {
-      const saved = localStorage.getItem(SALES_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [items, setItems] = useState<TrackedItem[]>(initializeItems);
+  const [sales, setSales] = useState<Sale[]>(loadSales);
   const [currentView, setCurrentView] = useState<'inventory' | 'sales'>('inventory');
   const [currentFilter, setCurrentFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedItemForSale, setSelectedItemForSale] = useState<TrackedItem | null>(null);
   const [saleQuantity, setSaleQuantity] = useState(1);
@@ -292,45 +183,50 @@ export default function App() {
   const [salePrice, setSalePrice] = useState(0);
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [saleNotes, setSaleNotes] = useState('');
-  
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
-  
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newItem, setNewItem] = useState({
-    sku: '', description: '', vehicles: '', category: '', newCategory: '',
-    qtyPdf: 0, qtyReceived: null as number | null,
-    inPdf: true, inExcel: true, inPhysical: false
-  });
-
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
 
   useEffect(() => {
-    setSaveStatus('saving');
-    const timer = setTimeout(() => {
-      const success = saveItems(items);
-      setSaveStatus(success ? 'saved' : 'error');
-    }, 300);
-    return () => clearTimeout(timer);
+    saveItems(items);
   }, [items]);
 
   useEffect(() => {
-    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    saveSales(sales);
   }, [sales]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
   }
 
-  const getStockForItem = (item: TrackedItem): number => {
-    const totalSold = sales
-      .filter(sale => sale.itemId === item.id)
-      .reduce((sum, sale) => sum + sale.quantity, 0);
-    const received = item.qtyReceived || 0;
-    return received - totalSold;
+  // Funciones de inventario
+  const updateQtyPdf = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyPdf: parseInt(value) || 0 } : item));
   };
 
+  const updateQtyReceived = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyReceived: value === '' ? null : parseInt(value) } : item));
+  };
+
+  const updateUnitPrice = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
+  };
+
+  const calculateStatus = (qtyPdf: number, qtyReceived: number | null): 'ok' | 'missing' | 'partial' | 'pending' | 'extra' => {
+    if (qtyReceived === null) return 'pending';
+    if (qtyReceived === 0) return 'missing';
+    if (qtyReceived < qtyPdf) return 'partial';
+    if (qtyReceived === qtyPdf) return 'ok';
+    return 'extra';
+  };
+
+  const getStockForItem = (item: TrackedItem): number => {
+    const totalSold = sales.filter(s => s.itemId === item.id).reduce((sum, s) => sum + s.quantity, 0);
+    return (item.qtyReceived || 0) - totalSold;
+  };
+
+  // Funciones de ventas
   const handleOpenSaleModal = (item: TrackedItem) => {
     setSelectedItemForSale(item);
     setSaleQuantity(1);
@@ -346,20 +242,6 @@ export default function App() {
 
   const handleRegisterSale = () => {
     if (!selectedItemForSale) return;
-    
-    const currentStock = getStockForItem(selectedItemForSale);
-    if (saleQuantity > currentStock) {
-      alert(`❌ Stock insuficiente. Disponible: ${currentStock} unidades`);
-      return;
-    }
-    if (saleQuantity <= 0) {
-      alert('❌ La cantidad debe ser mayor a 0');
-      return;
-    }
-    if (salePrice <= 0) {
-      alert('❌ El precio de venta debe ser mayor a 0');
-      return;
-    }
 
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
@@ -374,20 +256,16 @@ export default function App() {
       customerName: saleCustomerName || 'Cliente general',
       customerPhone: saleCustomerPhone,
       customerId: saleCustomerId,
-      notes: saleNotes
+      notes: saleNotes,
     };
 
     setSales(prev => [newSale, ...prev]);
     setShowSaleModal(false);
-    setSelectedItemForSale(null);
     setSaleQuantity(1);
     setSaleCustomerName('');
     setSaleCustomerPhone('');
     setSaleCustomerId('');
-    setSalePrice(0);
-    setSaleDate(new Date().toISOString().split('T')[0]);
     setSaleNotes('');
-    alert('✅ Venta registrada exitosamente');
   };
 
   const handleEditSale = (sale: Sale) => {
@@ -395,19 +273,67 @@ export default function App() {
     setShowEditSaleModal(true);
   };
 
-  const handleSaveEditedSale = (updatedSale: Sale) => {
-    setSales(prev => prev.map(s => s.id === updatedSale.id ? updatedSale : s));
+  const handleSaveEditedSale = () => {
+    if (!editingSale) return;
+    setSales(prev => prev.map(s => s.id === editingSale.id ? editingSale : s));
     setShowEditSaleModal(false);
     setEditingSale(null);
-    alert('✅ Venta actualizada exitosamente');
   };
 
   const handleCancelSale = (saleId: string) => {
-    if (window.confirm('¿Estás seguro de cancelar esta venta? El stock será devuelto.')) {
+    if (confirm('¿Estás seguro de cancelar esta venta?')) {
       setSales(prev => prev.filter(s => s.id !== saleId));
-      alert('✅ Venta cancelada y stock devuelto');
     }
   };
+
+  // Funciones de edición de productos
+  const handleEditItem = (item: TrackedItem) => {
+    setEditingItem(item);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingItem) return;
+    setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
+    setShowEditModal(false);
+    setEditingItem(null);
+  };
+
+  const handleDeleteItem = (id: string, sku: string) => {
+    if (confirm(`¿Estás seguro de eliminar "${sku}"?`)) {
+      setItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  // Estadísticas
+  const stats = useMemo(() => {
+    const total = items.length;
+    const ok = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
+    const missing = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
+    const partial = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
+    const pending = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
+    const extra = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
+    return { total, ok, missing, partial, pending, extra };
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const matchesFilter = currentFilter === 'all' || calculateStatus(item.qtyPdf, item.qtyReceived) === currentFilter;
+      const matchesCategory = selectedCategory === 'all' || item.categoryId === parseInt(selectedCategory);
+      const matchesSearch = searchQuery === '' || 
+        item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.vehicles.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFilter && matchesCategory && matchesSearch;
+    });
+  }, [items, currentFilter, selectedCategory, searchQuery]);
+
+  const categories = useMemo(() => {
+    return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
+  }, []);
+
+  const totalSalesAmount = useMemo(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
+  const totalProfit = useMemo(() => sales.reduce((sum, s) => sum + ((s.salePrice - s.unitPrice) * s.quantity), 0), [sales]);
 
   const monthlySales = useMemo(() => {
     const grouped: Record<string, Sale[]> = {};
@@ -419,775 +345,662 @@ export default function App() {
     return grouped;
   }, [sales]);
 
-  const totalSalesAmount = useMemo(() => {
-    return sales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-  }, [sales]);
-
-  const totalProfit = useMemo(() => {
-    return sales.reduce((sum, sale) => sum + ((sale.salePrice - sale.unitPrice) * sale.quantity), 0);
-  }, [sales]);
+  const outOfStockItems = useMemo(() => {
+    return items.filter(item => getStockForItem(item) === 0 && item.qtyReceived !== null && item.qtyReceived > 0);
+  }, [items, sales]);
 
   const frequentSalesItems = useMemo(() => {
-    // Productos que se han vendido al menos 2 veces
     const salesCount: Record<string, number> = {};
     sales.forEach(sale => {
       salesCount[sale.sku] = (salesCount[sale.sku] || 0) + 1;
     });
-    
     return items
       .filter(item => salesCount[item.sku] >= 2)
-      .map(item => ({
-        ...item,
-        salesCount: salesCount[item.sku] || 0
-      }))
+      .map(item => ({ ...item, salesCount: salesCount[item.sku] || 0 }))
       .sort((a, b) => b.salesCount - a.salesCount);
   }, [items, sales]);
 
-  const outOfStockItems = useMemo(() => {
-    return items.filter(item => {
-      const stock = getStockForItem(item);
-      return stock === 0 && item.qtyReceived !== null && item.qtyReceived > 0;
+  // Exportar inventario a Excel
+  const exportToExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Inventario');
+
+    worksheet.columns = [
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Descripción', key: 'description', width: 30 },
+      { header: 'Vehículos', key: 'vehicles', width: 25 },
+      { header: 'Categoría', key: 'category', width: 20 },
+      { header: 'Cantidad PDF', key: 'qtyPdf', width: 12 },
+      { header: 'Cantidad Física', key: 'qtyReceived', width: 15 },
+      { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
+      { header: 'Estado', key: 'status', width: 12 },
+    ];
+
+    items.forEach(item => {
+      worksheet.addRow({
+        sku: item.sku,
+        description: item.description,
+        vehicles: item.vehicles,
+        category: item.category,
+        qtyPdf: item.qtyPdf,
+        qtyReceived: item.qtyReceived || 0,
+        unitPrice: item.unitPrice,
+        status: calculateStatus(item.qtyPdf, item.qtyReceived),
+      });
     });
-  }, [items, sales]);
 
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const status = calculateStatus(item.qtyPdf, item.qtyReceived);
-      const matchesFilter = currentFilter === 'all' || status === currentFilter;
-      const matchesCategory = selectedCategory === 'all' || item.categoryId === parseInt(selectedCategory);
-      const normalizedSearch = normalizeText(searchQuery);
-      const matchesSearch = searchQuery === '' || 
-        normalizeText(item.sku).includes(normalizedSearch) ||
-        normalizeText(item.description).includes(normalizedSearch) ||
-        normalizeText(item.vehicles).includes(normalizedSearch) ||
-        normalizeText(item.category).includes(normalizedSearch);
-      return matchesFilter && matchesSearch && matchesCategory;
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Inventario_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Exportar ventas a Excel (MEJORADO)
+  const exportSalesToExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'GvAutoPartes';
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Ventas', { properties: { defaultRowHeight: 20 } });
+
+    worksheet.columns = [
+      { key: 'num', width: 6 },
+      { key: 'date', width: 12 },
+      { key: 'customerName', width: 20 },
+      { key: 'customerPhone', width: 15 },
+      { key: 'customerId', width: 12 },
+      { key: 'sku', width: 15 },
+      { key: 'description', width: 30 },
+      { key: 'quantity', width: 10 },
+      { key: 'unitPrice', width: 12 },
+      { key: 'salePrice', width: 12 },
+      { key: 'totalPrice', width: 12 },
+      { key: 'profit', width: 12 },
+      { key: 'notes', width: 25 },
+    ];
+
+    // Encabezado profesional
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-VE');
+    const hora = now.toLocaleTimeString('es-VE');
+    const totalVentas = sales.length;
+    const montoTotal = sales.reduce((sum, s) => sum + s.totalPrice, 0);
+    const gananciaTotal = sales.reduce((sum, s) => sum + ((s.salePrice - s.unitPrice) * s.quantity), 0);
+
+    // Fila 1: Nombre de la empresa
+    worksheet.mergeCells('A1:M1');
+    const cellEmpresa = worksheet.getCell('A1');
+    cellEmpresa.value = 'GvAutoPartes';
+    cellEmpresa.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FF1E3A8A' } };
+    cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(1).height = 30;
+
+    // Fila 2: Título del reporte
+    worksheet.mergeCells('A2:M2');
+    const cellTitulo = worksheet.getCell('A2');
+    cellTitulo.value = 'Reporte de Ventas';
+    cellTitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
+    cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(2).height = 25;
+
+    // Fila 3: Metadatos
+    worksheet.mergeCells('A3:G3');
+    worksheet.getCell('A3').value = `Fecha de Exportación: ${fecha} ${hora}`;
+    worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
+    worksheet.getCell('A3').alignment = { horizontal: 'left' };
+
+    worksheet.mergeCells('H3:M3');
+    worksheet.getCell('H3').value = `Total de Ventas: ${totalVentas}`;
+    worksheet.getCell('H3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    worksheet.getCell('H3').alignment = { horizontal: 'right' };
+    worksheet.getRow(3).height = 20;
+
+    // Fila 4: Resumen financiero
+    worksheet.mergeCells('A4:M4');
+    const cellResumen = worksheet.getCell('A4');
+    cellResumen.value = `💰 Monto Total: $${montoTotal.toFixed(2)} | 📈 Ganancia Total: $${gananciaTotal.toFixed(2)}`;
+    cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF059669' } };
+    cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+    worksheet.getRow(4).height = 25;
+
+    // Fila 5: Espacio
+    worksheet.getRow(5).height = 8;
+
+    // Fila 6: Encabezados de tabla (agregados manualmente)
+    const headerRowNum = 6;
+    const headerRow = worksheet.getRow(headerRowNum);
+    headerRow.values = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cantidad', 'Precio Ref.', 'Precio Venta', 'Total', 'Ganancia', 'Notas'];
+    headerRow.eachCell((cell: any) => {
+      cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+      };
     });
-  }, [items, currentFilter, searchQuery, selectedCategory]);
+    headerRow.height = 25;
 
-  const updateQtyPdf = (id: string, value: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyPdf: parseInt(value) || 0 } : item));
-  };
-
-  const updateQtyReceived = (id: string, value: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, qtyReceived: value === '' ? null : parseInt(value) } : item));
-  };
-
-  const updateUnitPrice = (id: string, value: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
-  };
-
-  const resetData = () => {
-    if (window.confirm('¿Resetear todos los datos? Se perderán todos los cambios locales.')) {
-      setItems(allItems);
-      saveItems(allItems);
-      setSaveStatus('saved');
-    }
-  };
-
-  const handleDeleteItem = (id: string, sku: string) => {
-    if (window.confirm(`¿Eliminar "${sku}"?`)) {
-      setItems(prev => prev.filter(item => item.id !== id));
-    }
-  };
-
-  const handleEditItem = (item: TrackedItem) => {
-    setEditingItem(item);
-    setShowEditModal(true);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingItem) return;
-    if (!editingItem.sku.trim() || !editingItem.description.trim()) {
-      alert('❌ SKU y descripción son obligatorios');
-      return;
-    }
-    setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
-    setShowEditModal(false);
-    setEditingItem(null);
-  };
-
-  const handleAddItem = () => {
-    if (!newItem.sku.trim() || !newItem.description.trim()) {
-      alert('❌ SKU y descripción son obligatorios');
-      return;
-    }
-    const category = newItem.newCategory.trim() || newItem.category;
-    if (!category) {
-      alert('❌ Debes seleccionar o crear una categoría');
-      return;
-    }
-    
-    const newItemData: TrackedItem = {
-      id: `custom-${Date.now()}`,
-      sku: newItem.sku.trim(),
-      description: newItem.description.trim(),
-      vehicles: newItem.vehicles.trim(),
-      category: category,
-      categoryId: 999,
-      qtyPdf: newItem.qtyPdf,
-      qtyPhysical: newItem.qtyReceived,
-      qtyReceived: newItem.qtyReceived,
-      status: calculateStatus(newItem.qtyPdf, newItem.qtyReceived),
-      inPdf: newItem.inPdf,
-      inExcel: newItem.inExcel,
-      inPhysical: newItem.inPhysical,
-      unitPrice: 0
-    };
-    
-    setItems(prev => [...prev, newItemData]);
-    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
-    setShowAddModal(false);
-  };
-
-  const exportCSV = async () => {
-    try {
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'GvAutoPartes';
-      workbook.created = new Date();
-      const worksheet = workbook.addWorksheet('Inventario', { properties: { defaultRowHeight: 20 } });
-
-      worksheet.columns = [
-        { header: 'N°', key: 'num', width: 6 },
-        { header: 'Indicadores', key: 'indicators', width: 14 },
-        { header: 'Categoría', key: 'category', width: 20 },
-        { header: 'Código SKU', key: 'sku', width: 18 },
-        { header: 'Descripción', key: 'description', width: 35 },
-        { header: 'Vehículos Compatibles', key: 'vehicles', width: 40 },
-        { header: 'Cant. PDF', key: 'qtyPdf', width: 12 },
-        { header: 'Cant. Física', key: 'qtyReceived', width: 12 },
-        { header: 'Estado', key: 'status', width: 14 },
-        { header: 'Precio Unitario', key: 'unitPrice', width: 14 },
-        { header: 'Precio Venta', key: 'salePrice', width: 14 }
-      ];
-
-      const now = new Date();
-      const fecha = now.toLocaleDateString('es-VE');
-      const hora = now.toLocaleTimeString('es-VE');
+    // Agregar datos de ventas
+    sales.forEach((sale, index) => {
+      const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
       
-      const exportItems = allItems.length > 0 ? allItems : items;
+      // CORRECCIÓN DE FECHA: Parsear correctamente la fecha
+      let formattedDate = '';
+      if (sale.date) {
+        // Si la fecha está en formato YYYY-MM-DD
+        if (sale.date.includes('-')) {
+          const [year, month, day] = sale.date.split('-');
+          formattedDate = `${day}/${month}/${year}`;
+        } else {
+          // Si es un timestamp ISO completo
+          const dateObj = new Date(sale.date);
+          if (!isNaN(dateObj.getTime())) {
+            const day = dateObj.getDate().toString().padStart(2, '0');
+            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const year = dateObj.getFullYear();
+            formattedDate = `${day}/${month}/${year}`;
+          }
+        }
+      }
       
-      const totalItems = exportItems.length;
-      const completados = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
-      const faltantes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length;
-      const incompletos = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length;
-      const extra = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length;
-      const pendientes = exportItems.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length;
-
-      worksheet.mergeCells('A1:K1');
-      const cellEmpresa = worksheet.getCell('A1');
-      cellEmpresa.value = 'GvAutoPartes';
-      cellEmpresa.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FF1E3A8A' } };
-      cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
-      worksheet.getRow(1).height = 30;
-
-      worksheet.mergeCells('A2:K2');
-      worksheet.getCell('A2').value = 'Inventario General - Respaldo de Emergencia';
-      worksheet.getCell('A2').font = { name: 'Arial', size: 14, bold: true };
-      worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-
-      worksheet.mergeCells('A3:F3');
-      worksheet.getCell('A3').value = `Fecha: ${fecha} ${hora}`;
-      worksheet.mergeCells('G3:K3');
-      worksheet.getCell('G3').value = `Total: ${totalItems} productos`;
-      worksheet.getCell('G3').alignment = { horizontal: 'right' };
-
-      worksheet.mergeCells('A4:K4');
-      worksheet.getCell('A4').value = `✅ Completos: ${completados} | ❌ Faltantes: ${faltantes} | ⚠️ Incompletos: ${incompletos} | ⭐ Extra: ${extra} | ⏳ Pendientes: ${pendientes}`;
-      worksheet.getCell('A4').alignment = { horizontal: 'center' };
-
-      worksheet.getRow(5).height = 8;
-
-      const headerRowNum = 6;
-      const headerRow = worksheet.getRow(headerRowNum);
-      headerRow.eachCell((cell: ExcelJS.Cell) => {
-        cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      const row = worksheet.addRow({
+        num: index + 1,
+        date: formattedDate,
+        customerName: sale.customerName,
+        customerPhone: sale.customerPhone || '',
+        customerId: sale.customerId || '',
+        sku: sale.sku,
+        description: sale.description,
+        quantity: sale.quantity,
+        unitPrice: sale.unitPrice,
+        salePrice: sale.salePrice,
+        totalPrice: sale.totalPrice,
+        profit: profit,
+        notes: sale.notes || '',
       });
 
-      exportItems.forEach((item, index) => {
-        let indicators = '';
-        if (item.inPdf) indicators += '🔴 PDF ';
-        if (item.inExcel) indicators += '🟢 Excel ';
-        if (item.inPhysical) indicators += '🟣 Físico';
-
-        const status = calculateStatus(item.qtyPdf, item.qtyReceived);
-        const statusText: Record<ItemStatus, string> = {
-          'ok': '✅ Completo', 'missing': '❌ No Vino', 'partial': '⚠️ Faltan', 'extra': '⭐ Extra', 'pending': '⏳ Pendiente'
+      // Estilo de las filas (efecto cebra)
+      const isEven = index % 2 === 0;
+      row.eachCell((cell: any, colNumber: number) => {
+        cell.font = { name: 'Arial', size: 10, color: { argb: 'FF333333' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF3F4F6' }
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
         };
 
-        const row = worksheet.addRow({
-          num: index + 1,
-          indicators: indicators,
-          category: item.category,
-          sku: item.sku,
-          description: item.description,
-          vehicles: item.vehicles,
-          qtyPdf: item.qtyPdf,
-          qtyReceived: item.qtyReceived === null ? 0 : item.qtyReceived,
-          status: statusText[status],
-          unitPrice: item.unitPrice,
-          salePrice: ''
-        });
-
-        const isEven = index % 2 === 0;
-        row.eachCell((cell: ExcelJS.Cell, colNumber: number) => {
-          cell.font = { name: 'Arial', size: 10 };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF3F4F6' } };
-          if (colNumber === 10) {
-            cell.numFmt = '$#,##0.00';
-            cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' } };
-          }
-          if (colNumber === 11) {
-            cell.numFmt = '$#,##0.00';
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E6' } };
-          }
-        });
-      });
-
-      worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
-      worksheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum + exportItems.length, column: 11 } };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Inventario_GvAutoPartes_${fecha.replace(/\//g, '-')}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error al exportar:', error);
-      alert('❌ Error al exportar');
-    }
-  };
-
-  const exportSalesToExcel = async () => {
-    try {
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'GvAutoPartes';
-      workbook.created = new Date();
-
-      const summarySheet = workbook.addWorksheet('Resumen Mensual');
-      summarySheet.columns = [
-        { header: 'Mes', key: 'month', width: 15 },
-        { header: 'Total Ventas', key: 'totalSales', width: 15 },
-        { header: 'Monto Total', key: 'totalAmount', width: 18 },
-        { header: 'Productos Vendidos', key: 'itemsSold', width: 20 }
-      ];
-
-      const months = Object.keys(monthlySales).sort().reverse();
-      months.forEach(month => {
-        const monthSales = monthlySales[month];
-        const totalAmount = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
-        const itemsSold = monthSales.reduce((sum, s) => sum + s.quantity, 0);
-        summarySheet.addRow({
-          month: month,
-          totalSales: monthSales.length,
-          totalAmount: totalAmount,
-          itemsSold: itemsSold
-        });
-      });
-
-      const detailSheet = workbook.addWorksheet('Detalle de Ventas');
-      detailSheet.columns = [
-        { header: 'Fecha', key: 'date', width: 15 },
-        { header: 'Cliente', key: 'customerName', width: 25 },
-        { header: 'Teléfono', key: 'customerPhone', width: 15 },
-        { header: 'Cédula', key: 'customerId', width: 15 },
-        { header: 'SKU', key: 'sku', width: 18 },
-        { header: 'Descripción', key: 'description', width: 40 },
-        { header: 'Cantidad', key: 'quantity', width: 12 },
-        { header: 'Precio Ref.', key: 'unitPrice', width: 14 },
-        { header: 'Precio Venta', key: 'salePrice', width: 14 },
-        { header: 'Total', key: 'totalPrice', width: 14 },
-        { header: 'Ganancia', key: 'profit', width: 14 },
-        { header: 'Notas', key: 'notes', width: 30 }
-      ];
-
-      sales.forEach(sale => {
-        const date = new Date(sale.date);
-        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
-        
-        detailSheet.addRow({
-          date: formattedDate,
-          customerName: sale.customerName,
-          customerPhone: sale.customerPhone,
-          customerId: sale.customerId,
-          sku: sale.sku,
-          description: sale.description,
-          quantity: sale.quantity,
-          unitPrice: sale.unitPrice,
-          salePrice: sale.salePrice,
-          totalPrice: sale.totalPrice,
-          profit: profit,
-          notes: sale.notes
-        });
-      });
-
-      detailSheet.eachRow((row: ExcelJS.Row, rowNumber: number) => {
-        if (rowNumber > 1) {
-          row.getCell(8).numFmt = '$#,##0.00';
-          row.getCell(9).numFmt = '$#,##0.00';
-          row.getCell(10).numFmt = '$#,##0.00';
-          row.getCell(11).numFmt = '$#,##0.00';
-          
-          const profitCell = row.getCell(11);
-          const profitValue = profitCell.value as number;
-          if (profitValue > 0) {
-            profitCell.font = { color: { argb: 'FF059669' }, bold: true };
-          } else if (profitValue < 0) {
-            profitCell.font = { color: { argb: 'FFDC2626' }, bold: true };
-          }
-        }
-      });
-
-      const stockSheet = workbook.addWorksheet('Alertas de Stock');
-      stockSheet.columns = [
-        { header: 'SKU', key: 'sku', width: 18 },
-        { header: 'Descripción', key: 'description', width: 40 },
-        { header: 'Stock Actual', key: 'stock', width: 15 },
-        { header: 'Ventas Realizadas', key: 'salesCount', width: 18 },
-        { header: 'Estado', key: 'status', width: 20 }
-      ];
-
-      // Productos sin stock
-      outOfStockItems.forEach((item: TrackedItem) => {
-        const salesCount = sales.filter(s => s.sku === item.sku).length;
-        stockSheet.addRow({
-          sku: item.sku,
-          description: item.description,
-          stock: 0,
-          salesCount: salesCount,
-          status: '❌ Sin Stock'
-        });
-      });
-
-      // Productos con ventas frecuentes
-      frequentSalesItems.forEach((item: any) => {
-        const stock = getStockForItem(item);
-        stockSheet.addRow({
-          sku: item.sku,
-          description: item.description,
-          stock: stock,
-          salesCount: item.salesCount,
-          status: '🔥 Ventas Frecuentes'
-        });
-      });
-
-      [summarySheet, detailSheet, stockSheet].forEach(sheet => {
-        const headerRow = sheet.getRow(1);
-        headerRow.eachCell((cell: ExcelJS.Cell) => {
-          cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        // Alineaciones específicas por columna
+        if (colNumber === 1) { // N°
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        });
+        } else if (colNumber === 2) { // Fecha
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 7) { // Descripción
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else if (colNumber === 8) { // Cantidad
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber >= 9 && colNumber <= 12) { // Precios y ganancia
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '$#,##0.00';
+          
+          // Colorear ganancia
+          if (colNumber === 12) {
+            const profitValue = cell.value as number;
+            if (profitValue > 0) {
+              cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' }, bold: true };
+            } else if (profitValue < 0) {
+              cell.font = { name: 'Arial', size: 10, color: { argb: 'FFDC2626' }, bold: true };
+            }
+          }
+        } else if (colNumber === 13) { // Notas
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
       });
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      const fecha = new Date().toLocaleDateString('es-VE').replace(/\//g, '-');
-      link.setAttribute('download', `Ventas_GvAutoPartes_${fecha}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error al exportar ventas:', error);
-      alert('❌ Error al exportar');
-    }
-  };
+      row.height = 20;
+    });
 
-  const exportJSON = () => {
-    const fecha = new Date().toISOString().split('T')[0];
-    const backup = {
-      version: '6.0',
-      date: new Date().toISOString(),
-      items: items,
-      sales: sales
+    // Congelar paneles (congelar encabezados)
+    worksheet.views = [
+      { state: 'frozen', ySplit: headerRowNum, xSplit: 0 }
+    ];
+
+    // Activar autofiltros
+    worksheet.autoFilter = {
+      from: { row: headerRowNum, column: 1 },
+      to: { row: headerRowNum + sales.length, column: 13 }
     };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Respaldo_GvAutoPartes_${fecha}.json`;
-    link.click();
+
+    // Pie de página
+    const footerRowNum = headerRowNum + sales.length + 2;
+    worksheet.mergeCells(`A${footerRowNum}:M${footerRowNum}`);
+    const cellFooter = worksheet.getCell(`A${footerRowNum}`);
+    cellFooter.value = 'Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A.';
+    cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
+    cellFooter.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Ventas_GvAutoPartes_${fecha.replace(/\//g, '-')}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const importJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  // Respaldo JSON
+  const exportJSON = () => {
+    const data = { items, sales, exportDate: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Respaldo_GvAutoPartes_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = (event) => {
       try {
-        const data = JSON.parse(e.target?.result as string);
-        
-        if (data.version && data.items) {
-          setItems(data.items);
-          if (data.sales) setSales(data.sales);
-          saveItems(data.items);
-          localStorage.setItem(SALES_KEY, JSON.stringify(data.sales || []));
-          alert(`✅ Respaldo cargado: ${data.items.length} productos y ${(data.sales || []).length} ventas`);
-        } else if (Array.isArray(data) && data.every((item: any) => 'sku' in item)) {
-          setItems(data);
-          saveItems(data);
-          alert('✅ Respaldo cargado');
-        } else {
-          alert('❌ Archivo inválido');
-        }
+        const data = JSON.parse(event.target?.result as string);
+        if (data.items) setItems(data.items);
+        if (data.sales) setSales(data.sales);
+        alert('✅ Respaldo cargado exitosamente');
       } catch {
-        alert('❌ Error al leer archivo');
+        alert('❌ Error al cargar el respaldo');
       }
     };
     reader.readAsText(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const stats = useMemo(() => {
-    return {
-      total: items.length,
-      ok: items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length,
-      missing: items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'missing').length,
-      partial: items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'partial').length,
-      pending: items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'pending').length,
-      extra: items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'extra').length
-    };
-  }, [items]);
+  const resetData = () => {
+    if (confirm('¿Estás seguro de resetear todos los datos?')) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SALES_KEY);
+      setItems(initializeItems());
+      setSales([]);
+    }
+  };
 
-  const categories = useMemo(() => {
-    return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
-  }, []);
+  // Componente de badge de estado
+  const StatusBadge = ({ status }: { status: string }) => {
+    const colors: Record<string, string> = {
+      ok: 'bg-green-100 text-green-800',
+      missing: 'bg-red-100 text-red-800',
+      partial: 'bg-yellow-100 text-yellow-800',
+      pending: 'bg-gray-100 text-gray-800',
+      extra: 'bg-blue-100 text-blue-800',
+    };
+    const labels: Record<string, string> = {
+      ok: '✅ Completo',
+      missing: '❌ Faltante',
+      partial: '⚠️ Parcial',
+      pending: '⏳ Pendiente',
+      extra: '⭐ Extra',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
+        {labels[status]}
+      </span>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">📦 GvAutoPartes - Control de Inventario</h1>
-            <p className="text-gray-500 text-sm mt-1">Edita las cantidades y precios. El estado se calcula automáticamente.</p>
-            <p className="text-xs text-gray-400 mt-1">Documento: 80010868 | Fecha: 25/09/2026 | Proveedor: Guzimport, C.A.</p>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setCurrentView('inventory')}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                currentView === 'inventory' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              📋 Inventario
-            </button>
-            <button 
-              onClick={() => setCurrentView('sales')}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                currentView === 'sales' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              💰 Ventas ({sales.length})
-            </button>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap gap-2 justify-end">
-              {currentView === 'inventory' ? (
-                <>
-                  <button onClick={exportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Excel</button>
-                  <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
-                  <button onClick={() => setShowAddModal(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md font-semibold text-sm">➕ Agregar</button>
-                  <button onClick={() => { if (window.confirm(`¿Recargar ${allItems.length} productos?`)) { setItems(allItems); saveItems(allItems); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md font-semibold text-sm">📥 Recargar Todo</button>
-                  <button onClick={resetData} className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 shadow-md font-semibold text-sm">🔄 Resetear</button>
-                </>
-              ) : (
-                <>
-                  <button onClick={exportSalesToExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md font-semibold text-sm">📥 Exportar Ventas</button>
-                  <button onClick={exportJSON} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-semibold text-sm">💾 Respaldo JSON</button>
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 shadow-md font-semibold text-sm">📂 Cargar Respaldo</button>
-                </>
-              )}
-              <button onClick={() => { if (window.confirm('¿Cerrar sesión?')) { logout(); setIsAuthenticated(false); } }} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 shadow-md font-semibold text-sm">🚪 Salir</button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">📦 GvAutoPartes</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Sistema de Inventario y Ventas</p>
             </div>
-            <input type="file" ref={fileInputRef} onChange={importJSON} accept=".json" style={{ display: 'none' }} />
-            <div className="text-xs">
-              {saveStatus === 'saving' && <span className="text-yellow-600">⏳ Guardando...</span>}
-              {saveStatus === 'saved' && <span className="text-green-600">✅ Guardado automáticamente</span>}
-              {saveStatus === 'error' && <span className="text-red-600">❌ Error al guardar</span>}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setCurrentView('inventory')}
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                  currentView === 'inventory' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                📋 Inventario
+              </button>
+              <button
+                onClick={() => setCurrentView('sales')}
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                  currentView === 'sales' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                💰 Ventas ({sales.length})
+              </button>
+              <button
+                onClick={() => { logout(); setIsAuthenticated(false); }}
+                className="px-3 sm:px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm transition-colors"
+              >
+                🚪 Salir
+              </button>
             </div>
           </div>
         </div>
+      </header>
 
-        {currentView === 'inventory' && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-              <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
-              <div className="text-xs text-gray-600 mt-1">Total Items</div>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-              <div className="text-2xl font-bold text-green-600">{stats.ok}</div>
-              <div className="text-xs text-gray-600 mt-1">✅ Completos</div>
-            </div>
-            <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
-              <div className="text-2xl font-bold text-red-600">{stats.missing}</div>
-              <div className="text-xs text-gray-600 mt-1">❌ No Vino</div>
-            </div>
-            <div className="bg-yellow-50 rounded-lg p-3 text-center border border-yellow-200">
-              <div className="text-2xl font-bold text-yellow-600">{stats.partial}</div>
-              <div className="text-xs text-gray-600 mt-1">⚠️ Faltan</div>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-              <div className="text-2xl font-bold text-blue-600">{stats.extra}</div>
-              <div className="text-xs text-gray-600 mt-1">⭐ Extra</div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-              <div className="text-2xl font-bold text-gray-500">{stats.pending}</div>
-              <div className="text-xs text-gray-600 mt-1">⏳ Pendientes</div>
-            </div>
-          </div>
-        )}
-
-        {currentView === 'sales' && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
-            <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
-              <div className="text-3xl font-bold text-green-600">${totalSalesAmount.toFixed(2)}</div>
-              <div className="text-sm text-gray-600 mt-1">💰 Total Vendido</div>
-            </div>
-            <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-200">
-              <div className="text-3xl font-bold text-emerald-600">${totalProfit.toFixed(2)}</div>
-              <div className="text-sm text-gray-600 mt-1">📈 Ganancia Total</div>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
-              <div className="text-3xl font-bold text-blue-600">{sales.length}</div>
-              <div className="text-sm text-gray-600 mt-1">📊 Total Ventas</div>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
-              <div className="text-3xl font-bold text-purple-600">{Object.keys(monthlySales).length}</div>
-              <div className="text-sm text-gray-600 mt-1">📅 Meses con Ventas</div>
-            </div>
-            <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
-              <div className="text-3xl font-bold text-orange-600">{frequentSalesItems.length}</div>
-              <div className="text-sm text-gray-600 mt-1">🔥 Ventas Frecuentes</div>
-            </div>
-          </div>
-        )}
-
-        {currentView === 'inventory' && (
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+        {currentView === 'inventory' ? (
           <>
-            <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-4 text-sm">
-                <span className="font-bold text-gray-700">Leyenda:</span>
-                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600"></div>PDF</span>
-                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600"></div>Excel</span>
-                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full bg-purple-500 border border-purple-600"></div>Físico</span>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
+              <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">Total</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {['all', 'pending', 'ok', 'missing', 'partial', 'extra'].map(filter => (
-                  <button key={filter} onClick={() => setCurrentFilter(filter)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${currentFilter === filter ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                    {filter === 'all' ? 'Todos' : filter === 'pending' ? '⏳ Pendientes' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ No Vino' : filter === 'partial' ? '⚠️ Faltan' : '⭐ Extra'}
+              <div className="bg-green-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">✅ Completos</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">{stats.ok}</p>
+              </div>
+              <div className="bg-red-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">❌ Faltantes</p>
+                <p className="text-xl sm:text-2xl font-bold text-red-600">{stats.missing}</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">⚠️ Parciales</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600">{stats.partial}</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">⭐ Extra</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">{stats.extra}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">⏳ Pendientes</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-600">{stats.pending}</p>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-white rounded-lg shadow p-3 sm:p-4 mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Buscar por SKU, descripción o vehículo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                >
+                  <option value="all">Todas las Categorías</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {['all', 'ok', 'missing', 'partial', 'pending', 'extra'].map(filter => (
+                  <button
+                    key={filter}
+                    onClick={() => setCurrentFilter(filter)}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                      currentFilter === filter ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {filter === 'all' ? 'Todos' : filter === 'ok' ? '✅ Completos' : filter === 'missing' ? '❌ Faltantes' : filter === 'partial' ? '⚠️ Parciales' : filter === 'pending' ? '⏳ Pendientes' : '⭐ Extra'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 mb-4">
-              <div className="flex-1 relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input type="text" placeholder="Buscar por SKU, descripción o vehículo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
-                {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
-              </div>
-              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 outline-none text-sm bg-white min-w-[200px]">
-                <option value="all">Todas las Categorías</option>
-                {categories.map(cat => <option key={cat.id} value={cat.id.toString()}>{cat.name} ({cat.count})</option>)}
-              </select>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button onClick={exportToExcel} className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm transition-colors">
+                📥 Exportar Excel
+              </button>
+              <button onClick={exportJSON} className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors">
+                💾 Respaldo JSON
+              </button>
+              <label className="px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm transition-colors cursor-pointer">
+                📂 Cargar Respaldo
+                <input type="file" accept=".json" onChange={importJSON} className="hidden" />
+              </label>
+              <button onClick={resetData} className="px-3 sm:px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm transition-colors">
+                🔄 Resetear
+              </button>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="min-w-full bg-white text-sm">
-                <thead className="bg-gray-800 text-white text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4 text-center">Indicadores</th>
-                    <th className="py-3 px-4 text-left">Código SKU</th>
-                    <th className="py-3 px-4 text-left">Descripción / Vehículos</th>
-                    <th className="py-3 px-4 text-center">Enviado (PDF)</th>
-                    <th className="py-3 px-4 text-center">Recibido (Físico)</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
-                    <th className="py-3 px-4 text-center">Precio Unitario</th>
-                    <th className="py-3 px-4 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="text-gray-700">
-                  {filteredItems.map((item) => {
-                    const status = calculateStatus(item.qtyPdf, item.qtyReceived);
-                    return (
-                      <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
-                        <td className="py-3 px-4 text-center"><IndicatorDots inPdf={item.inPdf} inExcel={item.inExcel} inPhysical={item.inPhysical} /></td>
-                        <td className="py-3 px-4 font-mono font-bold text-blue-700">{item.sku}</td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-gray-800">{item.description}</div>
-                          <div className="text-xs text-gray-500 mt-0.5">{item.vehicles}</div>
-                          <div className="text-xs text-gray-400 mt-0.5 italic">{item.category}</div>
+            {/* Inventory Table */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm">
+                  <thead className="bg-gray-100 border-b border-gray-200">
+                    <tr>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">SKU</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">Descripción</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Vehículos</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">PDF</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Precio</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Estado</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredItems.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-mono text-blue-600 font-semibold">{item.sku}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3">
+                          <div className="font-medium text-gray-900">{item.description}</div>
+                          <div className="text-xs text-gray-500 md:hidden">{item.vehicles}</div>
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyPdf} onChange={(e) => updateQtyPdf(item.id, e.target.value)} />
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-600 hidden md:table-cell">{item.vehicles}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <input
+                            type="number"
+                            value={item.qtyPdf}
+                            onChange={(e) => updateQtyPdf(item.id, e.target.value)}
+                            className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                          />
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <input type="number" min="0" className="w-[70px] text-center border-2 border-dashed border-gray-300 rounded-md px-2 py-1 font-bold focus:border-blue-500 focus:bg-blue-50 outline-none" value={item.qtyReceived === null ? '' : item.qtyReceived} placeholder="0" onChange={(e) => updateQtyReceived(item.id, e.target.value)} onFocus={(e) => e.target.select()} />
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <input
+                            type="number"
+                            value={item.qtyReceived || ''}
+                            onChange={(e) => updateQtyReceived(item.id, e.target.value)}
+                            className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                            placeholder="0"
+                          />
                         </td>
-                        <td className="py-3 px-4 text-center"><StatusBadge status={status} /></td>
-                        <td className="py-3 px-4 text-center">
-                          <input type="number" min="0" step="0.01" className="w-[90px] text-center border-2 border-dashed border-green-300 rounded-md px-2 py-1 font-bold text-green-700 focus:border-green-500 focus:bg-green-50 outline-none" value={item.unitPrice} onChange={(e) => updateUnitPrice(item.id, e.target.value)} onFocus={(e) => e.target.select()} placeholder="0.00" />
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <input
+                            type="number"
+                            value={item.unitPrice}
+                            onChange={(e) => updateUnitPrice(item.id, e.target.value)}
+                            className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                            step="0.01"
+                          />
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex gap-2 justify-center">
-                            <button 
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <StatusBadge status={calculateStatus(item.qtyPdf, item.qtyReceived)} />
+                        </td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <div className="flex gap-1 justify-center flex-wrap">
+                            <button
                               onClick={() => handleOpenSaleModal(item)}
                               disabled={getStockForItem(item) <= 0}
-                              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg text-xs font-semibold"
-                              title={getStockForItem(item) <= 0 ? 'Sin stock' : 'Vender'}
+                              className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                              title="Vender"
                             >
                               💰
                             </button>
-                            <button onClick={() => handleEditItem(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">✏️</button>
-                            <button onClick={() => handleDeleteItem(item.id, item.sku)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold">🗑️</button>
+                            <button
+                              onClick={() => handleEditItem(item)}
+                              className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium transition-colors"
+                              title="Editar"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(item.id, item.sku)}
+                              className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition-colors"
+                              title="Eliminar"
+                            >
+                              🗑️
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
-        )}
-        
-        {currentView === 'inventory' && filteredItems.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-3">🔍</div>
-            <h3 className="text-lg font-semibold text-gray-600">No se encontraron resultados</h3>
-          </div>
-        )}
-
-        {currentView === 'inventory' && (
-          <p className="text-xs text-gray-400 mt-4 text-center">
-            Mostrando: <span className="font-bold">{filteredItems.length}</span> de {items.length} productos
-          </p>
-        )}
-
-        {currentView === 'sales' && (
+        ) : (
           <>
-            {/* Alerta de Productos Sin Stock */}
+            {/* Sales Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
+              <div className="bg-green-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">💰 Total Vendido</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">${totalSalesAmount.toFixed(2)}</p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">📈 Ganancia</p>
+                <p className="text-xl sm:text-2xl font-bold text-emerald-600">${totalProfit.toFixed(2)}</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">📊 Total Ventas</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">{sales.length}</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">📅 Meses</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-600">{Object.keys(monthlySales).length}</p>
+              </div>
+              <div className="bg-orange-50 rounded-lg shadow p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-600">🔥 Frecuentes</p>
+                <p className="text-xl sm:text-2xl font-bold text-orange-600">{frequentSalesItems.length}</p>
+              </div>
+            </div>
+
+            {/* Alerts */}
             {outOfStockItems.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-bold text-red-800 mb-3">❌ Alerta de Productos Sin Stock</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {outOfStockItems.map((item: TrackedItem) => {
-                    const salesCount = sales.filter(s => s.sku === item.sku).length;
-                    return (
-                      <div key={item.id} className="bg-white rounded-lg p-3 border border-red-300">
-                        <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
-                        <div className="text-sm text-gray-800 mt-1">{item.description}</div>
-                        <div className="text-xs text-red-600 font-bold mt-2">
-                          ❌ Sin Stock | 🔥 {salesCount} ventas realizadas
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4">
+                <h3 className="text-base sm:text-lg font-bold text-red-800 mb-2">❌ Productos Sin Stock</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                  {outOfStockItems.slice(0, 6).map(item => (
+                    <div key={item.id} className="bg-white rounded p-2 sm:p-3 border border-red-300">
+                      <div className="font-mono text-xs sm:text-sm text-blue-700 font-bold">{item.sku}</div>
+                      <div className="text-xs sm:text-sm text-gray-800 mt-1">{item.description}</div>
+                      <div className="text-xs text-red-600 font-bold mt-1">❌ Sin Stock</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Ventas Frecuentes */}
             {frequentSalesItems.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-bold text-orange-800 mb-3">🔥 Ventas Frecuentes</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {frequentSalesItems.map((item: any) => {
-                    const stock = getStockForItem(item);
-                    return (
-                      <div key={item.id} className="bg-white rounded-lg p-3 border border-orange-300">
-                        <div className="font-mono text-sm text-blue-700 font-bold">{item.sku}</div>
-                        <div className="text-sm text-gray-800 mt-1">{item.description}</div>
-                        <div className="text-xs text-orange-600 font-bold mt-2">
-                          🔥 {item.salesCount} ventas | Stock: {stock}
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 sm:p-3 mb-4">
+                <h3 className="text-sm sm:text-base font-bold text-orange-800 mb-2">🔥 Ventas Frecuentes</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {frequentSalesItems.slice(0, 8).map(item => (
+                    <div key={item.id} className="bg-white rounded p-2 border border-orange-300">
+                      <div className="font-mono text-xs text-blue-700 font-bold truncate">{item.sku}</div>
+                      <div className="text-xs text-orange-600 font-bold mt-1">🔥 {item.salesCount} ventas</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {sales.length > 0 ? (
-              <div className="space-y-6">
+            {/* Sales Action Buttons */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button onClick={exportSalesToExcel} className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm transition-colors">
+                📥 Exportar Ventas Excel
+              </button>
+            </div>
+
+            {/* Sales by Month */}
+            {Object.keys(monthlySales).length > 0 ? (
+              <div className="space-y-4 sm:space-y-6">
                 {Object.keys(monthlySales).sort().reverse().map(month => {
                   const monthSales = monthlySales[month];
                   const monthTotal = monthSales.reduce((sum, s) => sum + s.totalPrice, 0);
-                  const monthDate = new Date(month + '-01');
-                  const monthName = monthDate.toLocaleDateString('es-VE', { year: 'numeric', month: 'long' });
+                  const monthName = new Date(month + '-01').toLocaleDateString('es-ES', { year: 'numeric', month: 'long' });
                   
                   return (
-                    <div key={month} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-xl font-bold capitalize">{monthName}</h3>
+                    <div key={month} className="bg-white rounded-lg shadow overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 sm:px-6 py-3 sm:py-4">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                          <h3 className="text-base sm:text-xl font-bold capitalize">{monthName}</h3>
                           <div className="text-right">
-                            <div className="text-2xl font-bold">${monthTotal.toFixed(2)}</div>
-                            <div className="text-sm opacity-90">{monthSales.length} ventas</div>
+                            <div className="text-lg sm:text-2xl font-bold">${monthTotal.toFixed(2)}</div>
+                            <div className="text-xs sm:text-sm opacity-90">{monthSales.length} ventas</div>
                           </div>
                         </div>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                          <thead className="bg-gray-50">
+                        <table className="w-full text-xs sm:text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Fecha</th>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Cliente</th>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Teléfono</th>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Cédula</th>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">SKU</th>
-                              <th className="py-3 px-4 text-left font-semibold text-gray-700">Producto</th>
-                              <th className="py-3 px-4 text-center font-semibold text-gray-700">Cant.</th>
-                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Ref.</th>
-                              <th className="py-3 px-4 text-right font-semibold text-gray-700">P. Venta</th>
-                              <th className="py-3 px-4 text-right font-semibold text-gray-700">Total</th>
-                              <th className="py-3 px-4 text-center font-semibold text-gray-700">Acciones</th>
+                              <th className="px-2 sm:px-4 py-2 text-left font-semibold text-gray-700">Fecha</th>
+                              <th className="px-2 sm:px-4 py-2 text-left font-semibold text-gray-700">Cliente</th>
+                              <th className="px-2 sm:px-4 py-2 text-left font-semibold text-gray-700 hidden md:table-cell">Teléfono</th>
+                              <th className="px-2 sm:px-4 py-2 text-left font-semibold text-gray-700 hidden lg:table-cell">Cédula</th>
+                              <th className="px-2 sm:px-4 py-2 text-left font-semibold text-gray-700">Producto</th>
+                              <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Cant.</th>
+                              <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700 hidden sm:table-cell">P. Ref.</th>
+                              <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">P. Venta</th>
+                              <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">Total</th>
+                              <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Acciones</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             {monthSales.map(sale => (
                               <tr key={sale.id} className="hover:bg-gray-50">
-                                <td className="py-3 px-4 text-gray-600">
-                                  {new Date(sale.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                <td className="px-2 sm:px-4 py-2 text-gray-600">
+                                  {new Date(sale.date).toLocaleDateString('es-VE')}
                                 </td>
-                                <td className="py-3 px-4 text-gray-800 font-medium">{sale.customerName}</td>
-                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerPhone || '-'}</td>
-                                <td className="py-3 px-4 text-gray-600 text-xs">{sale.customerId || '-'}</td>
-                                <td className="py-3 px-4 font-mono text-blue-700 text-xs">{sale.sku}</td>
-                                <td className="py-3 px-4 text-gray-800">{sale.description}</td>
-                                <td className="py-3 px-4 text-center font-bold">{sale.quantity}</td>
-                                <td className="py-3 px-4 text-right text-gray-500 text-xs">${sale.unitPrice.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-center">
+                                <td className="px-2 sm:px-4 py-2 text-gray-800 font-medium">{sale.customerName}</td>
+                                <td className="px-2 sm:px-4 py-2 text-gray-600 hidden md:table-cell">{sale.customerPhone || '-'}</td>
+                                <td className="px-2 sm:px-4 py-2 text-gray-600 hidden lg:table-cell">{sale.customerId || '-'}</td>
+                                <td className="px-2 sm:px-4 py-2">
+                                  <div className="font-mono text-blue-700 text-xs">{sale.sku}</div>
+                                  <div className="text-gray-800 text-xs sm:text-sm">{sale.description}</div>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 text-center font-bold">{sale.quantity}</td>
+                                <td className="px-2 sm:px-4 py-2 text-right text-gray-500 hidden sm:table-cell">${sale.unitPrice.toFixed(2)}</td>
+                                <td className="px-2 sm:px-4 py-2 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
+                                <td className="px-2 sm:px-4 py-2 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
+                                <td className="px-2 sm:px-4 py-2 text-center">
                                   <div className="flex gap-1 justify-center">
                                     <button
                                       onClick={() => handleEditSale(sale)}
-                                      className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold"
-                                      title="Editar venta"
+                                      className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium"
                                     >
                                       ✏️
                                     </button>
                                     <button
                                       onClick={() => handleCancelSale(sale.id)}
-                                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold"
-                                      title="Cancelar venta"
+                                      className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium"
                                     >
                                       🗑️
                                     </button>
@@ -1203,336 +1016,382 @@ export default function App() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <div className="text-6xl mb-4">💰</div>
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">No hay ventas registradas</h3>
-                <p className="text-gray-500">Ve al inventario y haz click en 💰 para registrar tu primera venta</p>
+              <div className="bg-white rounded-lg shadow p-8 sm:p-12 text-center">
+                <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">💰</div>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">No hay ventas registradas</h3>
+                <p className="text-sm sm:text-base text-gray-500">Ve al inventario y haz click en 💰 para registrar tu primera venta</p>
               </div>
             )}
           </>
         )}
+      </main>
 
-        <div className="mt-6 pt-4 border-t border-gray-200 text-center">
-          <p className="text-xs text-gray-400"><strong className="text-gray-600">GvAutoPartes</strong> | Proveedor: Guzimport, C.A.</p>
+      {/* Sale Modal */}
+      {showSaleModal && selectedItemForSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">💰 Registrar Venta</h2>
+            </div>
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <div className="font-mono text-sm text-blue-700 font-bold">{selectedItemForSale.sku}</div>
+                <div className="text-sm sm:text-base text-gray-800 mt-1">{selectedItemForSale.description}</div>
+                <div className="text-xs text-gray-500 mt-1">{selectedItemForSale.vehicles}</div>
+                <div className="mt-2 flex justify-between items-center">
+                  <span className="text-xs sm:text-sm text-gray-600">Stock disponible:</span>
+                  <span className="text-base sm:text-lg font-bold text-green-600">{getStockForItem(selectedItemForSale)} unidades</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Fecha de Venta</label>
+                <input
+                  type="date"
+                  value={saleDate}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cliente</label>
+                <input
+                  type="text"
+                  value={saleCustomerName}
+                  onChange={(e) => setSaleCustomerName(e.target.value)}
+                  placeholder="Nombre del cliente"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Teléfono</label>
+                  <input
+                    type="tel"
+                    value={saleCustomerPhone}
+                    onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                    placeholder="0414-1234567"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cédula</label>
+                  <input
+                    type="text"
+                    value={saleCustomerId}
+                    onChange={(e) => setSaleCustomerId(e.target.value)}
+                    placeholder="V-12345678"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={getStockForItem(selectedItemForSale)}
+                  value={saleQuantity}
+                  onChange={(e) => setSaleQuantity(parseInt(e.target.value) || 1)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Ref.</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={saleUnitPrice}
+                    onChange={(e) => setSaleUnitPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border-2 border-green-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-bold text-green-700 text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Notas</label>
+                <textarea
+                  value={saleNotes}
+                  onChange={(e) => setSaleNotes(e.target.value)}
+                  placeholder="Observaciones..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 sm:p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Total:</span>
+                  <span className="text-lg sm:text-2xl font-bold text-green-700">${(saleQuantity * salePrice).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:gap-3">
+                <button
+                  onClick={handleRegisterSale}
+                  className="flex-1 bg-green-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-green-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ✅ Registrar
+                </button>
+                <button
+                  onClick={() => setShowSaleModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="bg-emerald-600 text-white px-6 py-4 rounded-t-xl flex justify-between items-center">
-                <h2 className="text-xl font-bold">➕ Agregar Nueva Pieza</h2>
-                <button onClick={() => setShowAddModal(false)} className="text-white text-2xl">×</button>
-              </div>
-              <div className="p-6 space-y-4">
-                <input type="text" value={newItem.sku} onChange={(e) => setNewItem({...newItem, sku: e.target.value})} placeholder="Código SKU *" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input type="text" value={newItem.description} onChange={(e) => setNewItem({...newItem, description: e.target.value})} placeholder="Descripción *" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <textarea value={newItem.vehicles} onChange={(e) => setNewItem({...newItem, vehicles: e.target.value})} placeholder="Vehículos Compatibles" rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <select value={newItem.category} onChange={(e) => setNewItem({...newItem, category: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                  <option value="">Seleccionar categoría...</option>
-                  {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
-                </select>
-                <input type="text" value={newItem.newCategory} onChange={(e) => setNewItem({...newItem, newCategory: e.target.value})} placeholder="O crear nueva categoría..." className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="number" min="0" value={newItem.qtyPdf} onChange={(e) => setNewItem({...newItem, qtyPdf: parseInt(e.target.value) || 0})} placeholder="Cantidad PDF" className="px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input type="number" min="0" value={newItem.qtyReceived === null ? '' : newItem.qtyReceived} onChange={(e) => setNewItem({...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value)})} placeholder="Cantidad Recibida" className="px-4 py-2 border border-gray-300 rounded-lg" />
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={handleAddItem} className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 font-semibold">✅ Agregar</button>
-                  <button onClick={() => setShowAddModal(false)} className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold">❌ Cancelar</button>
-                </div>
-              </div>
+      {/* Edit Sale Modal */}
+      {showEditSaleModal && editingSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">✏️ Editar Venta</h2>
             </div>
-          </div>
-        )}
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <div className="font-mono text-sm text-blue-700 font-bold">{editingSale.sku}</div>
+                <div className="text-sm sm:text-base text-gray-800 mt-1">{editingSale.description}</div>
+              </div>
 
-        {showEditModal && editingItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="bg-blue-600 text-white px-6 py-4 rounded-t-xl flex justify-between items-center">
-                <h2 className="text-xl font-bold">✏️ Editar Pieza</h2>
-                <button onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="text-white text-2xl">×</button>
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Fecha</label>
+                <input
+                  type="date"
+                  value={editingSale.date.split('T')[0]}
+                  onChange={(e) => setEditingSale({ ...editingSale, date: new Date(e.target.value).toISOString() })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
               </div>
-              <div className="p-6 space-y-4">
-                <input type="text" value={editingItem.sku} onChange={(e) => setEditingItem({...editingItem, sku: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input type="text" value={editingItem.description} onChange={(e) => setEditingItem({...editingItem, description: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <textarea value={editingItem.vehicles} onChange={(e) => setEditingItem({...editingItem, vehicles: e.target.value})} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input type="text" value={editingItem.category} onChange={(e) => setEditingItem({...editingItem, category: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <div className="grid grid-cols-3 gap-4">
-                  <input type="number" min="0" value={editingItem.qtyPdf} onChange={(e) => setEditingItem({...editingItem, qtyPdf: parseInt(e.target.value) || 0})} placeholder="Cant. PDF" className="px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input type="number" min="0" value={editingItem.qtyReceived === null ? '' : editingItem.qtyReceived} onChange={(e) => setEditingItem({...editingItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value)})} placeholder="Cant. Física" className="px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input type="number" min="0" step="0.01" value={editingItem.unitPrice} onChange={(e) => setEditingItem({...editingItem, unitPrice: parseFloat(e.target.value) || 0})} placeholder="Precio Unit." className="px-4 py-2 border border-gray-300 rounded-lg" />
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={handleSaveEdit} className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold">💾 Guardar</button>
-                  <button onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold">❌ Cancelar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {showEditSaleModal && editingSale && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
-                <h2 className="text-xl font-bold">✏️ Editar Venta</h2>
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cliente</label>
+                <input
+                  type="text"
+                  value={editingSale.customerName}
+                  onChange={(e) => setEditingSale({ ...editingSale, customerName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
               </div>
-              <div className="p-6 space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="font-mono text-sm text-blue-700 font-bold">{editingSale.sku}</div>
-                  <div className="text-gray-800 mt-1">{editingSale.description}</div>
-                </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Teléfono</label>
                   <input
-                    type="date"
-                    value={editingSale.date.split('T')[0]}
-                    onChange={(e) => setEditingSale({...editingSale, date: new Date(e.target.value).toISOString()})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    type="tel"
+                    value={editingSale.customerPhone}
+                    onChange={(e) => setEditingSale({ ...editingSale, customerPhone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cédula</label>
                   <input
                     type="text"
-                    value={editingSale.customerName}
-                    onChange={(e) => setEditingSale({...editingSale, customerName: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                    value={editingSale.customerId}
+                    onChange={(e) => setEditingSale({ ...editingSale, customerId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
-                    <input
-                      type="tel"
-                      value={editingSale.customerPhone}
-                      onChange={(e) => setEditingSale({...editingSale, customerPhone: e.target.value})}
-                      placeholder="0414-1234567"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
-                    <input
-                      type="text"
-                      value={editingSale.customerId}
-                      onChange={(e) => setEditingSale({...editingSale, customerId: e.target.value})}
-                      placeholder="V-12345678"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={editingSale.quantity}
-                    onChange={(e) => setEditingSale({...editingSale, quantity: parseInt(e.target.value) || 1, totalPrice: (parseInt(e.target.value) || 1) * editingSale.salePrice})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Precio Ref. ($)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editingSale.unitPrice}
-                      onChange={(e) => setEditingSale({...editingSale, unitPrice: parseFloat(e.target.value) || 0})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Precio Venta ($)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editingSale.salePrice}
-                      onChange={(e) => setEditingSale({...editingSale, salePrice: parseFloat(e.target.value) || 0, totalPrice: editingSale.quantity * (parseFloat(e.target.value) || 0)})}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none font-bold text-green-700"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
-                  <textarea
-                    value={editingSale.notes}
-                    onChange={(e) => setEditingSale({...editingSale, notes: e.target.value})}
-                    placeholder="Devolución, cambio, observaciones..."
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none resize-none"
-                  />
-                </div>
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-gray-700">Total Actualizado:</span>
-                    <span className="text-2xl font-bold text-blue-700">${editingSale.totalPrice.toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => handleSaveEditedSale(editingSale)} className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors">💾 Guardar Cambios</button>
-                  <button onClick={() => { setShowEditSaleModal(false); setEditingSale(null); }} className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors">❌ Cancelar</button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {showSaleModal && selectedItemForSale && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-t-xl">
-                <h2 className="text-xl font-bold">💰 Registrar Venta</h2>
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editingSale.quantity}
+                  onChange={(e) => {
+                    const qty = parseInt(e.target.value) || 1;
+                    setEditingSale({ ...editingSale, quantity: qty, totalPrice: qty * editingSale.salePrice });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
               </div>
-              <div className="p-6 space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="font-mono text-sm text-blue-700 font-bold">{selectedItemForSale.sku}</div>
-                  <div className="text-gray-800 mt-1">{selectedItemForSale.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">{selectedItemForSale.vehicles}</div>
-                  <div className="mt-3 flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Stock disponible:</span>
-                    <span className="text-lg font-bold text-green-600">{getStockForItem(selectedItemForSale)} unidades</span>
-                  </div>
-                </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Venta</label>
-                  <input
-                    type="date"
-                    value={saleDate}
-                    onChange={(e) => setSaleDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Cliente</label>
-                  <input
-                    type="text"
-                    value={saleCustomerName}
-                    onChange={(e) => setSaleCustomerName(e.target.value)}
-                    placeholder="Nombre completo"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
-                    <input
-                      type="tel"
-                      value={saleCustomerPhone}
-                      onChange={(e) => setSaleCustomerPhone(e.target.value)}
-                      placeholder="0414-1234567"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
-                    <input
-                      type="text"
-                      value={saleCustomerId}
-                      onChange={(e) => setSaleCustomerId(e.target.value)}
-                      placeholder="V-12345678"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Ref.</label>
                   <input
                     type="number"
-                    min="1"
-                    max={getStockForItem(selectedItemForSale)}
-                    value={saleQuantity}
-                    onChange={(e) => setSaleQuantity(parseInt(e.target.value) || 1)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
+                    step="0.01"
+                    value={editingSale.unitPrice}
+                    onChange={(e) => setEditingSale({ ...editingSale, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm sm:text-base"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Precio Unitario <span className="text-xs text-gray-500">(Referencia)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={saleUnitPrice}
-                      onChange={(e) => setSaleUnitPrice(parseFloat(e.target.value) || 0)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                      placeholder="Precio de referencia"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Precio de Venta <span className="text-xs text-green-600">(Real)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={salePrice}
-                      onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none font-bold text-green-700"
-                      placeholder="Precio final al cliente"
-                      autoFocus
-                    />
-                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notas / Observaciones</label>
-                  <textarea
-                    value={saleNotes}
-                    onChange={(e) => setSaleNotes(e.target.value)}
-                    placeholder="Observaciones adicionales..."
-                    rows={2}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none resize-none"
-                  />
-                </div>
-                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-gray-700">Total de la Venta:</span>
-                    <span className="text-2xl font-bold text-green-700">${(saleQuantity * salePrice).toFixed(2)}</span>
-                  </div>
-                  {salePrice > saleUnitPrice && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-600">Ganancia estimada:</span>
-                      <span className="text-green-600 font-bold">
-                        +${((salePrice - saleUnitPrice) * saleQuantity).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleRegisterSale}
-                    className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold transition-colors"
-                  >
-                    ✅ Registrar Venta
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowSaleModal(false);
-                      setSelectedItemForSale(null);
-                      setSaleQuantity(1);
-                      setSaleCustomerName('');
-                      setSaleCustomerPhone('');
-                      setSaleCustomerId('');
-                      setSalePrice(0);
-                      setSaleDate(new Date().toISOString().split('T')[0]);
-                      setSaleNotes('');
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingSale.salePrice}
+                    onChange={(e) => {
+                      const price = parseFloat(e.target.value) || 0;
+                      setEditingSale({ ...editingSale, salePrice: price, totalPrice: editingSale.quantity * price });
                     }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
-                  >
-                    ❌ Cancelar
-                  </button>
+                    className="w-full px-3 py-2 border-2 border-green-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-bold text-green-700 text-sm sm:text-base"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Notas</label>
+                <textarea
+                  value={editingSale.notes}
+                  onChange={(e) => setEditingSale({ ...editingSale, notes: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 sm:p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Total:</span>
+                  <span className="text-lg sm:text-2xl font-bold text-blue-700">${editingSale.totalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:gap-3">
+                <button
+                  onClick={handleSaveEditedSale}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-blue-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  💾 Guardar
+                </button>
+                <button
+                  onClick={() => setShowEditSaleModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">✏️ Editar Producto</h2>
+            </div>
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">SKU</label>
+                <input
+                  type="text"
+                  value={editingItem.sku}
+                  onChange={(e) => setEditingItem({ ...editingItem, sku: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Descripción</label>
+                <input
+                  type="text"
+                  value={editingItem.description}
+                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Vehículos Compatibles</label>
+                <textarea
+                  value={editingItem.vehicles}
+                  onChange={(e) => setEditingItem({ ...editingItem, vehicles: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Categoría</label>
+                <input
+                  type="text"
+                  value={editingItem.category}
+                  onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad PDF</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editingItem.qtyPdf}
+                    onChange={(e) => setEditingItem({ ...editingItem, qtyPdf: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad Física</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editingItem.qtyReceived || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editingItem.unitPrice}
+                  onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="flex gap-2 sm:gap-3">
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-blue-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  💾 Guardar
+                </button>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
