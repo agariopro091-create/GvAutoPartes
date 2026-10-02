@@ -407,19 +407,19 @@ export default function App() {
     const worksheet = workbook.addWorksheet('Ventas', { properties: { defaultRowHeight: 20 } });
 
     worksheet.columns = [
-      { header: 'N°', key: 'num', width: 6 },
-      { header: 'Fecha', key: 'date', width: 12 },
-      { header: 'Cliente', key: 'customerName', width: 20 },
-      { header: 'Teléfono', key: 'customerPhone', width: 15 },
-      { header: 'Cédula', key: 'customerId', width: 12 },
-      { header: 'SKU', key: 'sku', width: 15 },
-      { header: 'Producto', key: 'description', width: 30 },
-      { header: 'Cantidad', key: 'quantity', width: 10 },
-      { header: 'Precio Ref.', key: 'unitPrice', width: 12 },
-      { header: 'Precio Venta', key: 'salePrice', width: 12 },
-      { header: 'Total', key: 'totalPrice', width: 12 },
-      { header: 'Ganancia', key: 'profit', width: 12 },
-      { header: 'Notas', key: 'notes', width: 25 },
+      { key: 'num', width: 6 },
+      { key: 'date', width: 12 },
+      { key: 'customerName', width: 20 },
+      { key: 'customerPhone', width: 15 },
+      { key: 'customerId', width: 12 },
+      { key: 'sku', width: 15 },
+      { key: 'description', width: 30 },
+      { key: 'quantity', width: 10 },
+      { key: 'unitPrice', width: 12 },
+      { key: 'salePrice', width: 12 },
+      { key: 'totalPrice', width: 12 },
+      { key: 'profit', width: 12 },
+      { key: 'notes', width: 25 },
     ];
 
     // Encabezado profesional
@@ -470,9 +470,10 @@ export default function App() {
     // Fila 5: Espacio
     worksheet.getRow(5).height = 8;
 
-    // Fila 6: Encabezados de tabla
+    // Fila 6: Encabezados de tabla (agregados manualmente)
     const headerRowNum = 6;
     const headerRow = worksheet.getRow(headerRowNum);
+    headerRow.values = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cantidad', 'Precio Ref.', 'Precio Venta', 'Total', 'Ganancia', 'Notas'];
     headerRow.eachCell((cell: any) => {
       cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
