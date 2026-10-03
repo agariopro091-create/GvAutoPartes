@@ -1274,8 +1274,8 @@ export default function App() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={editingItem.salePrice}
-                    onChange={(e) => setEditingItem({ ...editingItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    value={editingItem.unitPrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
                   />
                 </div>
@@ -1402,18 +1402,6 @@ export default function App() {
                     placeholder="0.00"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newItem.salePrice}
-                    onChange={(e) => setNewItem({ ...newItem, salePrice: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
-                    placeholder="0.00"
-                  />
-                </div>
               </div>
 
               <div className="flex gap-2 sm:gap-3 pt-2">
@@ -1426,7 +1414,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
+                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, inPdf: true, inExcel: true, inPhysical: false });
                   }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
