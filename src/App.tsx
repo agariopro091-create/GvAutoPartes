@@ -358,7 +358,7 @@ export default function App() {
     };
     
     setItems(prev => [...prev, newItemData]);
-    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
+    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
     alert('✅ Producto agregado exitosamente');
   };
@@ -426,7 +426,7 @@ export default function App() {
       { header: 'Descripción', key: 'description', width: 30 },
       { header: 'Vehículos', key: 'vehicles', width: 25 },
       { header: 'Categoría', key: 'category', width: 20 },
-      { header: 'Cantidad PDF', key: 'qtyPdf', width: 12 },
+      { header: 'Cantidad Factura', key: 'qtyPdf', width: 12 },
       { header: 'Cantidad Física', key: 'qtyReceived', width: 15 },
       { header: 'Stock Actual', key: 'stock', width: 12 },
       { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
@@ -696,7 +696,7 @@ export default function App() {
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">SKU</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">Descripción</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Vehículos</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">PDF</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Factura</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Stock</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Unit.</th>
@@ -1443,7 +1443,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
+                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
                   }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
