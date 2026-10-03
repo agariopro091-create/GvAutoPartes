@@ -33,10 +33,11 @@ interface Sale {
   customerPhone: string;
   customerId: string;
   notes: string;
+  paymentPending: boolean;
 }
 
-const STORAGE_KEY = 'gvautopartes_inventory_data_v9';
-const SALES_KEY = 'gvautopartes_sales_data_v9';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v10';
+const SALES_KEY = 'gvautopartes_sales_data_v10';
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
@@ -176,6 +177,7 @@ export default function App() {
   const [salePrice, setSalePrice] = useState(0);
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [saleNotes, setSaleNotes] = useState('');
+  const [salePaymentPending, setSalePaymentPending] = useState(false);
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -266,6 +268,7 @@ export default function App() {
       customerPhone: saleCustomerPhone,
       customerId: saleCustomerId,
       notes: saleNotes,
+      paymentPending: salePaymentPending,
     };
 
     // Registrar la venta
@@ -281,6 +284,7 @@ export default function App() {
     setSaleCustomerPhone('');
     setSaleCustomerId('');
     setSaleNotes('');
+    setSalePaymentPending(false);
     
     alert(`✅ Venta registrada exitosamente\n📦 Stock actualizado automáticamente\n📊 Stock restante: ${getStockForItem(selectedItemForSale) - saleQuantity} unidades`);
   };
@@ -501,12 +505,17 @@ export default function App() {
   };
 
   const exportJSON = () => {
-    const data = { items, sales, exportDate: new Date().toISOString() };
+    // Solo respaldar ventas, no productos (los productos vienen del código fuente)
+    const data = { 
+      version: 'ventas-v1',
+      sales, 
+      exportDate: new Date().toISOString() 
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Respaldo_GvAutoPartes_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `Respaldo_Ventas_GvAutoPartes_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -519,9 +528,19 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.items) setItems(data.items);
-        if (data.sales) setSales(data.sales);
-        alert('✅ Respaldo cargado exitosamente');
+        
+        // Soportar formato nuevo (solo ventas) y antiguo (items + sales)
+        if (data.version === 'ventas-v1' && data.sales) {
+          // Nuevo formato: solo ventas
+          setSales(data.sales);
+          alert(`✅ Respaldo de ventas cargado: ${data.sales.length} ventas`);
+        } else if (data.sales) {
+          // Formato antiguo: tiene ventas
+          setSales(data.sales);
+          alert(`✅ Respaldo cargado: ${data.sales.length} ventas`);
+        } else {
+          alert('❌ El archivo no contiene datos de ventas válidos');
+        }
       } catch {
         alert('❌ Error al cargar el respaldo');
       }
@@ -867,12 +886,13 @@ export default function App() {
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700 hidden sm:table-cell">P. Ref.</th>
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">P. Venta</th>
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">Total</th>
+                              <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Pago</th>
                               <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Acciones</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             {monthSales.map(sale => (
-                              <tr key={sale.id} className="hover:bg-gray-50">
+                              <tr key={sale.id} className={`hover:bg-gray-50 ${sale.paymentPending ? 'bg-yellow-50' : ''}`}>
                                 <td className="px-2 sm:px-4 py-2 text-gray-600">
                                   {new Date(sale.date).toLocaleDateString('es-VE')}
                                 </td>
@@ -887,6 +907,23 @@ export default function App() {
                                 <td className="px-2 sm:px-4 py-2 text-right text-gray-500 hidden sm:table-cell">${sale.unitPrice.toFixed(2)}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
+                                <td className="px-2 sm:px-4 py-2 text-center">
+                                  <label className="inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={sale.paymentPending}
+                                      onChange={(e) => {
+                                        const updated = { ...sale, paymentPending: e.target.checked };
+                                        setSales(prev => prev.map(s => s.id === sale.id ? updated : s));
+                                      }}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500"></div>
+                                    <span className="ml-2 text-xs font-medium text-gray-700 hidden sm:inline">
+                                      {sale.paymentPending ? '⏳ Pendiente' : '✅ Pagado'}
+                                    </span>
+                                  </label>
+                                </td>
                                 <td className="px-2 sm:px-4 py-2 text-center">
                                   <div className="flex gap-1 justify-center">
                                     <button
@@ -1030,6 +1067,20 @@ export default function App() {
                 />
               </div>
 
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="paymentPending"
+                  checked={salePaymentPending}
+                  onChange={(e) => setSalePaymentPending(e.target.checked)}
+                  className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500 cursor-pointer"
+                />
+                <label htmlFor="paymentPending" className="flex-1 cursor-pointer">
+                  <span className="text-sm sm:text-base font-semibold text-yellow-800">⏳ Pago Pendiente</span>
+                  <p className="text-xs text-yellow-700">Marca si el cliente aún no ha pagado</p>
+                </label>
+              </div>
+
               <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 sm:p-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs sm:text-sm font-semibold text-gray-700">Total:</span>
@@ -1045,7 +1096,10 @@ export default function App() {
                   ✅ Registrar
                 </button>
                 <button
-                  onClick={() => setShowSaleModal(false)}
+                  onClick={() => {
+                    setShowSaleModal(false);
+                    setSalePaymentPending(false);
+                  }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
                   ❌ Cancelar
@@ -1157,6 +1211,20 @@ export default function App() {
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base resize-none"
                 />
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="editPaymentPending"
+                  checked={editingSale.paymentPending}
+                  onChange={(e) => setEditingSale({ ...editingSale, paymentPending: e.target.checked })}
+                  className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500 cursor-pointer"
+                />
+                <label htmlFor="editPaymentPending" className="flex-1 cursor-pointer">
+                  <span className="text-sm sm:text-base font-semibold text-yellow-800">⏳ Pago Pendiente</span>
+                  <p className="text-xs text-yellow-700">Marca si el cliente aún no ha pagado</p>
+                </label>
               </div>
 
               <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 sm:p-4">

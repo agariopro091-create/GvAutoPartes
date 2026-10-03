@@ -347,7 +347,7 @@ export const inventoryData: Category[] = [
       { sku: '23300-31160A-W', description: 'Filtro Gasolina', vehicles: 'TOYOTA 4RUNNER / TOYOTA FORTUNER', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '321087403-D', description: 'Filtro Gasolina Tapa Módulo', vehicles: 'DAIHATSU TERIOS COOL BEGO 1.3 1.5 02-14 (DKIG)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '12458679-W', description: 'Filtro Gasolina Interno con Manguera', vehicles: 'CHEVROLET SILVERADO / CHEVROLET TAHOE / CHEVROLET AVALANCHE (ACDELCO)', qtyPdf: 1, qtyPhysical: 1, status: 'ok', category: 'Filtros de Gasolina' },
-      { sku: '8141117110-D', description: 'Filtro Gasolina', vehicles: 'CHERY ARAUCA / CHERY X1 1.3 / CHERY QQ6 / CHERY ORINOCO 1.8 (DKIG)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
+
       { sku: '82FB/9155/AA-W', description: 'Filtro Gasolina', vehicles: 'FORD FIESTA BALITA / FORD BRONCO / FORD KA (MORUCH)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '31911-25000-W', description: 'Filtro Gasolina Interno', vehicles: 'HYUNDAI TUCSON / KIA SPORTAGE 2.0 (MORUCH)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
     ],
