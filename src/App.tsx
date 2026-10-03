@@ -35,8 +35,8 @@ interface Sale {
   notes: string;
 }
 
-const STORAGE_KEY = 'gvautopartes_inventory_data_v8';
-const SALES_KEY = 'gvautopartes_sales_data_v8';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v9';
+const SALES_KEY = 'gvautopartes_sales_data_v9';
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 

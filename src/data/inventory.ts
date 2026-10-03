@@ -378,6 +378,10 @@ export const inventoryData: Category[] = [
       { sku: '4231352-C12', description: 'Aceite 5W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: '4555020-C12', description: 'Aceite 10W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: '52135366', description: 'Aceite 20W50 Mineral', vehicles: 'Universal (ACDELCO)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-006', description: 'Premium Protection Blend 15W40 API SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-007', description: 'Classic SAE 20W50 SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-009', description: 'Premium Protection Blend 20W50 API SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-033', description: 'Premium Protection Semi-Sintético 15W40 SP (Galón)', vehicles: 'Universal (Valvoline)', qtyPdf: 3, qtyPhysical: 3, status: 'ok', category: 'Aceites de Motor' },
     ],
   },
   {

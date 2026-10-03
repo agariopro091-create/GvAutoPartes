@@ -334,4 +334,10 @@ export const unitPrices: Record<string, number> = {
   // Lubricantes y Líquidos
   'LX-946DOT3': 8.35,
   'LX-3500': 43.00,
+  
+  // Valvoline (nuevos)
+  'VALVO-006': 10.44,
+  'VALVO-007': 10.25,
+  'VALVO-009': 10.44,
+  'VALVO-033': 38.77,
 };
