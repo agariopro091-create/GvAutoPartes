@@ -13,6 +13,7 @@ interface TrackedItem {
   qtyPdf: number;
   qtyReceived: number | null;
   unitPrice: number;
+  salePrice: number;
   status: 'ok' | 'missing' | 'partial' | 'pending' | 'extra';
   inPdf: boolean;
   inExcel: boolean;
@@ -83,6 +84,7 @@ const saveSales = (sales: Sale[]) => {
   const items: TrackedItem[] = [];
   inventoryData.forEach((category: any) => {
     category.items.forEach((item: any, idx: number) => {
+      const unitPrice = unitPrices[item.sku] || 0;
       items.push({
         id: `${category.id}-${idx}`,
         sku: item.sku,
@@ -92,7 +94,8 @@ const saveSales = (sales: Sale[]) => {
         categoryId: category.id,
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyPhysical,
-        unitPrice: unitPrices[item.sku] || 0,
+        unitPrice: unitPrice,
+        salePrice: unitPrice * 2,
         status: item.status,
         inPdf: true,
         inExcel: true,
@@ -183,6 +186,7 @@ export default function App() {
   const [newItem, setNewItem] = useState({
     sku: '', description: '', vehicles: '', category: '', newCategory: '',
     qtyPdf: 0, qtyReceived: null as number | null,
+    unitPrice: 0, salePrice: 0,
     inPdf: true, inExcel: true, inPhysical: false
   });
 
@@ -203,6 +207,10 @@ export default function App() {
 
   const updateUnitPrice = (id: string, value: string) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
+  };
+
+  const updateSalePrice = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, salePrice: parseFloat(value) || 0 } : item));
   };
 
   const calculateStatus = (qtyPdf: number, qtyReceived: number | null): 'ok' | 'missing' | 'partial' | 'pending' | 'extra' => {
@@ -345,7 +353,8 @@ export default function App() {
       inPdf: newItem.inPdf,
       inExcel: newItem.inExcel,
       inPhysical: newItem.inPhysical,
-      unitPrice: 0
+      unitPrice: 0,
+      salePrice: 0
     };
     
     setItems(prev => [...prev, newItemData]);
@@ -690,7 +699,8 @@ export default function App() {
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">PDF</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Stock</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Precio</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Unit.</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Venta</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Estado</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Acciones</th>
                     </tr>
@@ -734,6 +744,15 @@ export default function App() {
                               value={item.unitPrice}
                               onChange={(e) => updateUnitPrice(item.id, e.target.value)}
                               className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <input
+                              type="number"
+                              value={item.salePrice}
+                              onChange={(e) => updateSalePrice(item.id, e.target.value)}
+                              className="w-16 sm:w-20 px-2 py-1 border-2 border-green-300 rounded text-center text-xs sm:text-sm font-semibold text-green-700"
                               step="0.01"
                             />
                           </td>
@@ -1254,16 +1273,29 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editingItem.unitPrice}
-                  onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                />
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingItem.unitPrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingItem.salePrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2 sm:gap-3">
@@ -1370,6 +1402,33 @@ export default function App() {
                     onChange={(e) => setNewItem({ ...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
                     placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.unitPrice}
+                    onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.salePrice}
+                    onChange={(e) => setNewItem({ ...newItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
