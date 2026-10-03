@@ -347,7 +347,7 @@ export const inventoryData: Category[] = [
       { sku: '23300-31160A-W', description: 'Filtro Gasolina', vehicles: 'TOYOTA 4RUNNER / TOYOTA FORTUNER', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '321087403-D', description: 'Filtro Gasolina Tapa Módulo', vehicles: 'DAIHATSU TERIOS COOL BEGO 1.3 1.5 02-14 (DKIG)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '12458679-W', description: 'Filtro Gasolina Interno con Manguera', vehicles: 'CHEVROLET SILVERADO / CHEVROLET TAHOE / CHEVROLET AVALANCHE (ACDELCO)', qtyPdf: 1, qtyPhysical: 1, status: 'ok', category: 'Filtros de Gasolina' },
-      { sku: '8141117110-D', description: 'Filtro Gasolina', vehicles: 'CHERY ARAUCA / CHERY X1 1.3 / CHERY QQ6 / CHERY ORINOCO 1.8 (DKIG)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
+
       { sku: '82FB/9155/AA-W', description: 'Filtro Gasolina', vehicles: 'FORD FIESTA BALITA / FORD BRONCO / FORD KA (MORUCH)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
       { sku: '31911-25000-W', description: 'Filtro Gasolina Interno', vehicles: 'HYUNDAI TUCSON / KIA SPORTAGE 2.0 (MORUCH)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Filtros de Gasolina' },
     ],
@@ -378,6 +378,10 @@ export const inventoryData: Category[] = [
       { sku: '4231352-C12', description: 'Aceite 5W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: '4555020-C12', description: 'Aceite 10W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: '52135366', description: 'Aceite 20W50 Mineral', vehicles: 'Universal (ACDELCO)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-006', description: 'Premium Protection Blend 15W40 API SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-007', description: 'Classic SAE 20W50 SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-009', description: 'Premium Protection Blend 20W50 API SP', vehicles: 'Universal (Valvoline)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: 'VALVO-033', description: 'Premium Protection Semi-Sintético 15W40 SP (Galón)', vehicles: 'Universal (Valvoline)', qtyPdf: 3, qtyPhysical: 3, status: 'ok', category: 'Aceites de Motor' },
     ],
   },
   {
