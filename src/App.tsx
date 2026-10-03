@@ -13,7 +13,6 @@ interface TrackedItem {
   qtyPdf: number;
   qtyReceived: number | null;
   unitPrice: number;
-  salePrice: number;
   status: 'ok' | 'missing' | 'partial' | 'pending' | 'extra';
   inPdf: boolean;
   inExcel: boolean;
@@ -95,7 +94,6 @@ const saveSales = (sales: Sale[]) => {
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyPhysical,
         unitPrice: unitPrice,
-        salePrice: unitPrice * 2,
         status: item.status,
         inPdf: true,
         inExcel: true,
@@ -186,7 +184,7 @@ export default function App() {
   const [newItem, setNewItem] = useState({
     sku: '', description: '', vehicles: '', category: '', newCategory: '',
     qtyPdf: 0, qtyReceived: null as number | null,
-    unitPrice: 0, salePrice: 0,
+    unitPrice: 0,
     inPdf: true, inExcel: true, inPhysical: false
   });
 
@@ -207,10 +205,6 @@ export default function App() {
 
   const updateUnitPrice = (id: string, value: string) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
-  };
-
-  const updateSalePrice = (id: string, value: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, salePrice: parseFloat(value) || 0 } : item));
   };
 
   const calculateStatus = (qtyPdf: number, qtyReceived: number | null): 'ok' | 'missing' | 'partial' | 'pending' | 'extra' => {
@@ -353,12 +347,11 @@ export default function App() {
       inPdf: newItem.inPdf,
       inExcel: newItem.inExcel,
       inPhysical: newItem.inPhysical,
-      unitPrice: 0,
-      salePrice: 0
+      unitPrice: 0
     };
     
     setItems(prev => [...prev, newItemData]);
-    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
+    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
     alert('✅ Producto agregado exitosamente');
   };
@@ -699,8 +692,7 @@ export default function App() {
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Factura</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Stock</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Unit.</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Venta</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Precio</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Estado</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Acciones</th>
                     </tr>
@@ -744,15 +736,6 @@ export default function App() {
                               value={item.unitPrice}
                               onChange={(e) => updateUnitPrice(item.id, e.target.value)}
                               className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
-                              step="0.01"
-                            />
-                          </td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                            <input
-                              type="number"
-                              value={item.salePrice}
-                              onChange={(e) => updateSalePrice(item.id, e.target.value)}
-                              className="w-16 sm:w-20 px-2 py-1 border-2 border-green-300 rounded text-center text-xs sm:text-sm font-semibold text-green-700"
                               step="0.01"
                             />
                           </td>
