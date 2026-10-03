@@ -482,7 +482,7 @@ export default function App() {
       { key: 'salePrice', width: 13 },
       { key: 'totalPrice', width: 13 },
       { key: 'profit', width: 13 },
-      { key: 'payment', width: 14 },
+      { key: 'payment', width: 18 }, // Más ancha para mejor visibilidad
       { key: 'notes', width: 25 },
     ];
 
@@ -658,11 +658,23 @@ export default function App() {
         } else if (colNumber === 13) { // Estado de Pago
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
           if (sale.paymentPending) {
-            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFB45309' } };
+            cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB45309' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            cell.border = {
+              top: { style: 'medium', color: { argb: 'FFB45309' } },
+              bottom: { style: 'medium', color: { argb: 'FFB45309' } },
+              left: { style: 'medium', color: { argb: 'FFB45309' } },
+              right: { style: 'medium', color: { argb: 'FFB45309' } }
+            };
           } else {
-            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF065F46' } };
+            cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF065F46' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            cell.border = {
+              top: { style: 'medium', color: { argb: 'FF065F46' } },
+              bottom: { style: 'medium', color: { argb: 'FF065F46' } },
+              left: { style: 'medium', color: { argb: 'FF065F46' } },
+              right: { style: 'medium', color: { argb: 'FF065F46' } }
+            };
           }
         } else if (colNumber === 14) { // Notas
           cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
@@ -719,19 +731,64 @@ export default function App() {
       totalProfitCell.alignment = { horizontal: 'right', vertical: 'middle' };
       totalProfitCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
-      // Estado Pago
-      worksheet.getCell(`M${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      worksheet.getCell(`M${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+      // Estado Pago - Resumen
+      const paymentSummaryCell = worksheet.getCell(`M${totalRowNum}`);
+      paymentSummaryCell.value = `✅${ventasPagadas} | ⏳${ventasPendientes}`;
+      paymentSummaryCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      paymentSummaryCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      paymentSummaryCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      paymentSummaryCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
       // Notas
       worksheet.getCell(`N${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
       worksheet.getCell(`N${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
       totalRow.height = 30;
+
+      // === FILA DE RESUMEN DE PAGOS ===
+      const paymentSummaryRowNum = totalRowNum + 1;
+      worksheet.mergeCells(`A${paymentSummaryRowNum}:L${paymentSummaryRowNum}`);
+      const paymentSummaryLabel = worksheet.getCell(`A${paymentSummaryRowNum}`);
+      paymentSummaryLabel.value = '💳 RESUMEN DE PAGOS';
+      paymentSummaryLabel.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      paymentSummaryLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B7280' } };
+      paymentSummaryLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+      paymentSummaryLabel.border = {
+        top: { style: 'medium', color: { argb: 'FF6B7280' } },
+        bottom: { style: 'medium', color: { argb: 'FF6B7280' } }
+      };
+
+      // Pagado
+      const paidCell = worksheet.getCell(`M${paymentSummaryRowNum}`);
+      paidCell.value = `✅ $${(montoTotal - montoPendiente).toFixed(2)}`;
+      paidCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF065F46' } };
+      paidCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+      paidCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      paidCell.border = {
+        top: { style: 'medium', color: { argb: 'FF065F46' } },
+        bottom: { style: 'medium', color: { argb: 'FF065F46' } },
+        left: { style: 'medium', color: { argb: 'FF065F46' } },
+        right: { style: 'medium', color: { argb: 'FF065F46' } }
+      };
+
+      // Pendiente
+      const pendingCell = worksheet.getCell(`N${paymentSummaryRowNum}`);
+      pendingCell.value = `⏳ $${montoPendiente.toFixed(2)}`;
+      pendingCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB45309' } };
+      pendingCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+      pendingCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      pendingCell.border = {
+        top: { style: 'medium', color: { argb: 'FFB45309' } },
+        bottom: { style: 'medium', color: { argb: 'FFB45309' } },
+        left: { style: 'medium', color: { argb: 'FFB45309' } },
+        right: { style: 'medium', color: { argb: 'FFB45309' } }
+      };
+
+      worksheet.getRow(paymentSummaryRowNum).height = 28;
     }
 
     // === PIE DE PÁGINA ===
-    const footerRowNum = headerRowNum + sales.length + 3;
+    const footerRowNum = headerRowNum + sales.length + (sales.length > 0 ? 5 : 3);
     worksheet.mergeCells(`A${footerRowNum}:N${footerRowNum}`);
     const cellFooter = worksheet.getCell(`A${footerRowNum}`);
     cellFooter.value = '📄 Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A. | Documento: 80010868';
