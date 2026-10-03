@@ -3,7 +3,6 @@ import { inventoryData } from './data/inventory';
 import { unitPrices } from './data/prices';
 import ExcelJS from 'exceljs';
 
-// Tipos
 interface TrackedItem {
   id: string;
   sku: string;
@@ -36,13 +35,11 @@ interface Sale {
   notes: string;
 }
 
-// Constantes
-const STORAGE_KEY = 'gvautopartes_inventory_data_v6';
-const SALES_KEY = 'gvautopartes_sales_data_v6';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v7';
+const SALES_KEY = 'gvautopartes_sales_data_v7';
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
-// Funciones de autenticación
 const checkAuth = (): boolean => localStorage.getItem(AUTH_KEY) === 'authenticated';
 const login = (password: string): boolean => {
   if (password === DEFAULT_PASSWORD) {
@@ -53,7 +50,6 @@ const login = (password: string): boolean => {
 };
 const logout = () => localStorage.removeItem(AUTH_KEY);
 
-// Funciones de almacenamiento
 const loadItems = (): TrackedItem[] => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -80,14 +76,14 @@ const saveSales = (sales: Sale[]) => {
   localStorage.setItem(SALES_KEY, JSON.stringify(sales));
 };
 
-// Inicializar datos
-const initializeItems = (): TrackedItem[] => {
+  const initializeItems = (): TrackedItem[] => {
   const saved = loadItems();
   if (saved.length > 0) return saved;
 
   const items: TrackedItem[] = [];
-  inventoryData.forEach((category) => {
-    category.items.forEach((item, idx) => {
+  inventoryData.forEach((category: any) => {
+    category.items.forEach((item: any, idx: number) => {
+      const unitPrice = unitPrices[item.sku] || 0;
       items.push({
         id: `${category.id}-${idx}`,
         sku: item.sku,
@@ -97,7 +93,7 @@ const initializeItems = (): TrackedItem[] => {
         categoryId: category.id,
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyPhysical,
-        unitPrice: unitPrices[item.sku] || 0,
+        unitPrice: unitPrice,
         status: item.status,
         inPdf: true,
         inExcel: true,
@@ -108,8 +104,6 @@ const initializeItems = (): TrackedItem[] => {
   saveItems(items);
   return items;
 };
-
-// Componente de Login
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -164,7 +158,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-// Componente principal
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(checkAuth);
   const [items, setItems] = useState<TrackedItem[]>(initializeItems);
@@ -189,31 +182,19 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
-    sku: '',
-    description: '',
-    vehicles: '',
-    category: '',
-    newCategory: '',
-    qtyPdf: 0,
-    qtyReceived: null as number | null,
-    inPdf: true,
-    inExcel: true,
-    inPhysical: false
+    sku: '', description: '', vehicles: '', category: '', newCategory: '',
+    qtyPdf: 0, qtyReceived: null as number | null,
+    unitPrice: 0,
+    inPdf: true, inExcel: true, inPhysical: false
   });
 
-  useEffect(() => {
-    saveItems(items);
-  }, [items]);
-
-  useEffect(() => {
-    saveSales(sales);
-  }, [sales]);
+  useEffect(() => { saveItems(items); }, [items]);
+  useEffect(() => { saveSales(sales); }, [sales]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
   }
 
-  // Funciones de inventario
   const updateQtyPdf = (id: string, value: string) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, qtyPdf: parseInt(value) || 0 } : item));
   };
@@ -234,12 +215,12 @@ export default function App() {
     return 'extra';
   };
 
+  // FUNCIÓN CLAVE: Calcula el stock disponible restando las ventas
   const getStockForItem = (item: TrackedItem): number => {
     const totalSold = sales.filter(s => s.itemId === item.id).reduce((sum, s) => sum + s.quantity, 0);
     return (item.qtyReceived || 0) - totalSold;
   };
 
-  // Funciones de ventas
   const handleOpenSaleModal = (item: TrackedItem) => {
     setSelectedItemForSale(item);
     setSaleQuantity(1);
@@ -253,8 +234,23 @@ export default function App() {
     setShowSaleModal(true);
   };
 
+  // REGISTRO DE VENTA CON DESCUENTO AUTOMÁTICO DEL INVENTARIO
   const handleRegisterSale = () => {
     if (!selectedItemForSale) return;
+
+    const currentStock = getStockForItem(selectedItemForSale);
+    if (saleQuantity > currentStock) {
+      alert(`❌ Stock insuficiente. Disponible: ${currentStock} unidades`);
+      return;
+    }
+    if (saleQuantity <= 0) {
+      alert('❌ La cantidad debe ser mayor a 0');
+      return;
+    }
+    if (salePrice <= 0) {
+      alert('❌ El precio de venta debe ser mayor a 0');
+      return;
+    }
 
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
@@ -272,13 +268,21 @@ export default function App() {
       notes: saleNotes,
     };
 
+    // Registrar la venta
     setSales(prev => [newSale, ...prev]);
+    
+    // El descuento del inventario se calcula automáticamente en getStockForItem
+    // No necesitamos modificar qtyReceived porque el stock se calcula dinámicamente
+    
     setShowSaleModal(false);
+    setSelectedItemForSale(null);
     setSaleQuantity(1);
     setSaleCustomerName('');
     setSaleCustomerPhone('');
     setSaleCustomerId('');
     setSaleNotes('');
+    
+    alert(`✅ Venta registrada exitosamente\n📦 Stock actualizado automáticamente\n📊 Stock restante: ${getStockForItem(selectedItemForSale) - saleQuantity} unidades`);
   };
 
   const handleEditSale = (sale: Sale) => {
@@ -291,15 +295,16 @@ export default function App() {
     setSales(prev => prev.map(s => s.id === editingSale.id ? editingSale : s));
     setShowEditSaleModal(false);
     setEditingSale(null);
+    alert('✅ Venta actualizada - Stock recalculado automáticamente');
   };
 
   const handleCancelSale = (saleId: string) => {
-    if (confirm('¿Estás seguro de cancelar esta venta?')) {
+    if (confirm('¿Estás seguro de cancelar esta venta? El stock será devuelto automáticamente.')) {
       setSales(prev => prev.filter(s => s.id !== saleId));
+      alert('✅ Venta cancelada - Stock devuelto automáticamente');
     }
   };
 
-  // Funciones de edición de productos
   const handleEditItem = (item: TrackedItem) => {
     setEditingItem(item);
     setShowEditModal(true);
@@ -346,11 +351,11 @@ export default function App() {
     };
     
     setItems(prev => [...prev, newItemData]);
-    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
+    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
+    alert('✅ Producto agregado exitosamente');
   };
 
-  // Estadísticas
   const stats = useMemo(() => {
     const total = items.length;
     const ok = items.filter(i => calculateStatus(i.qtyPdf, i.qtyReceived) === 'ok').length;
@@ -374,7 +379,7 @@ export default function App() {
   }, [items, currentFilter, selectedCategory, searchQuery]);
 
   const categories = useMemo(() => {
-    return inventoryData.map(cat => ({ id: cat.id, name: cat.name, count: cat.items.length }));
+    return inventoryData.map((cat: any) => ({ id: cat.id, name: cat.name, count: cat.items.length }));
   }, []);
 
   const totalSalesAmount = useMemo(() => sales.reduce((sum, s) => sum + s.totalPrice, 0), [sales]);
@@ -405,7 +410,6 @@ export default function App() {
       .sort((a, b) => b.salesCount - a.salesCount);
   }, [items, sales]);
 
-  // Exportar inventario a Excel
   const exportToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Inventario');
@@ -415,8 +419,9 @@ export default function App() {
       { header: 'Descripción', key: 'description', width: 30 },
       { header: 'Vehículos', key: 'vehicles', width: 25 },
       { header: 'Categoría', key: 'category', width: 20 },
-      { header: 'Cantidad PDF', key: 'qtyPdf', width: 12 },
+      { header: 'Cantidad Factura', key: 'qtyPdf', width: 12 },
       { header: 'Cantidad Física', key: 'qtyReceived', width: 15 },
+      { header: 'Stock Actual', key: 'stock', width: 12 },
       { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
       { header: 'Estado', key: 'status', width: 12 },
     ];
@@ -429,6 +434,7 @@ export default function App() {
         category: item.category,
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyReceived || 0,
+        stock: getStockForItem(item),
         unitPrice: item.unitPrice,
         status: calculateStatus(item.qtyPdf, item.qtyReceived),
       });
@@ -444,119 +450,31 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Exportar ventas a Excel (MEJORADO)
   const exportSalesToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'GvAutoPartes';
-    workbook.created = new Date();
-    const worksheet = workbook.addWorksheet('Ventas', { properties: { defaultRowHeight: 20 } });
+    const worksheet = workbook.addWorksheet('Ventas');
 
     worksheet.columns = [
-      { key: 'num', width: 6 },
-      { key: 'date', width: 12 },
-      { key: 'customerName', width: 20 },
-      { key: 'customerPhone', width: 15 },
-      { key: 'customerId', width: 12 },
-      { key: 'sku', width: 15 },
-      { key: 'description', width: 30 },
-      { key: 'quantity', width: 10 },
-      { key: 'unitPrice', width: 12 },
-      { key: 'salePrice', width: 12 },
-      { key: 'totalPrice', width: 12 },
-      { key: 'profit', width: 12 },
-      { key: 'notes', width: 25 },
+      { header: 'Fecha', key: 'date', width: 12 },
+      { header: 'Cliente', key: 'customerName', width: 20 },
+      { header: 'Teléfono', key: 'customerPhone', width: 15 },
+      { header: 'Cédula', key: 'customerId', width: 12 },
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Producto', key: 'description', width: 30 },
+      { header: 'Cantidad', key: 'quantity', width: 10 },
+      { header: 'Precio Ref.', key: 'unitPrice', width: 12 },
+      { header: 'Precio Venta', key: 'salePrice', width: 12 },
+      { header: 'Total', key: 'totalPrice', width: 12 },
+      { header: 'Ganancia', key: 'profit', width: 12 },
+      { header: 'Notas', key: 'notes', width: 25 },
     ];
 
-    // Encabezado profesional
-    const now = new Date();
-    const fecha = now.toLocaleDateString('es-VE');
-    const hora = now.toLocaleTimeString('es-VE');
-    const totalVentas = sales.length;
-    const montoTotal = sales.reduce((sum, s) => sum + s.totalPrice, 0);
-    const gananciaTotal = sales.reduce((sum, s) => sum + ((s.salePrice - s.unitPrice) * s.quantity), 0);
-
-    // Fila 1: Nombre de la empresa
-    worksheet.mergeCells('A1:M1');
-    const cellEmpresa = worksheet.getCell('A1');
-    cellEmpresa.value = 'GvAutoPartes';
-    cellEmpresa.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FF1E3A8A' } };
-    cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(1).height = 30;
-
-    // Fila 2: Título del reporte
-    worksheet.mergeCells('A2:M2');
-    const cellTitulo = worksheet.getCell('A2');
-    cellTitulo.value = 'Reporte de Ventas';
-    cellTitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
-    cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(2).height = 25;
-
-    // Fila 3: Metadatos
-    worksheet.mergeCells('A3:G3');
-    worksheet.getCell('A3').value = `Fecha de Exportación: ${fecha} ${hora}`;
-    worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
-    worksheet.getCell('A3').alignment = { horizontal: 'left' };
-
-    worksheet.mergeCells('H3:M3');
-    worksheet.getCell('H3').value = `Total de Ventas: ${totalVentas}`;
-    worksheet.getCell('H3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
-    worksheet.getCell('H3').alignment = { horizontal: 'right' };
-    worksheet.getRow(3).height = 20;
-
-    // Fila 4: Resumen financiero
-    worksheet.mergeCells('A4:M4');
-    const cellResumen = worksheet.getCell('A4');
-    cellResumen.value = `💰 Monto Total: $${montoTotal.toFixed(2)} | 📈 Ganancia Total: $${gananciaTotal.toFixed(2)}`;
-    cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF059669' } };
-    cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
-    worksheet.getRow(4).height = 25;
-
-    // Fila 5: Espacio
-    worksheet.getRow(5).height = 8;
-
-    // Fila 6: Encabezados de tabla (agregados manualmente)
-    const headerRowNum = 6;
-    const headerRow = worksheet.getRow(headerRowNum);
-    headerRow.values = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cantidad', 'Precio Ref.', 'Precio Venta', 'Total', 'Ganancia', 'Notas'];
-    headerRow.eachCell((cell: any) => {
-      cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
-      };
-    });
-    headerRow.height = 25;
-
-    // Agregar datos de ventas
-    sales.forEach((sale, index) => {
+    sales.forEach(sale => {
       const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
+      const dateObj = new Date(sale.date);
+      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
       
-      // CORRECCIÓN DE FECHA: Parsear correctamente la fecha
-      let formattedDate = '';
-      if (sale.date) {
-        // Si la fecha está en formato YYYY-MM-DD
-        if (sale.date.includes('-')) {
-          const [year, month, day] = sale.date.split('-');
-          formattedDate = `${day}/${month}/${year}`;
-        } else {
-          // Si es un timestamp ISO completo
-          const dateObj = new Date(sale.date);
-          if (!isNaN(dateObj.getTime())) {
-            const day = dateObj.getDate().toString().padStart(2, '0');
-            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-            const year = dateObj.getFullYear();
-            formattedDate = `${day}/${month}/${year}`;
-          }
-        }
-      }
-      
-      const row = worksheet.addRow({
-        num: index + 1,
+      worksheet.addRow({
         date: formattedDate,
         customerName: sale.customerName,
         customerPhone: sale.customerPhone || '',
@@ -570,85 +488,18 @@ export default function App() {
         profit: profit,
         notes: sale.notes || '',
       });
-
-      // Estilo de las filas (efecto cebra)
-      const isEven = index % 2 === 0;
-      row.eachCell((cell: any, colNumber: number) => {
-        cell.font = { name: 'Arial', size: 10, color: { argb: 'FF333333' } };
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF3F4F6' }
-        };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
-        };
-
-        // Alineaciones específicas por columna
-        if (colNumber === 1) { // N°
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if (colNumber === 2) { // Fecha
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if (colNumber === 7) { // Descripción
-          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-        } else if (colNumber === 8) { // Cantidad
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } else if (colNumber >= 9 && colNumber <= 12) { // Precios y ganancia
-          cell.alignment = { horizontal: 'right', vertical: 'middle' };
-          cell.numFmt = '$#,##0.00';
-          
-          // Colorear ganancia
-          if (colNumber === 12) {
-            const profitValue = cell.value as number;
-            if (profitValue > 0) {
-              cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' }, bold: true };
-            } else if (profitValue < 0) {
-              cell.font = { name: 'Arial', size: 10, color: { argb: 'FFDC2626' }, bold: true };
-            }
-          }
-        } else if (colNumber === 13) { // Notas
-          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-        } else {
-          cell.alignment = { horizontal: 'left', vertical: 'middle' };
-        }
-      });
-
-      row.height = 20;
     });
-
-    // Congelar paneles (congelar encabezados)
-    worksheet.views = [
-      { state: 'frozen', ySplit: headerRowNum, xSplit: 0 }
-    ];
-
-    // Activar autofiltros
-    worksheet.autoFilter = {
-      from: { row: headerRowNum, column: 1 },
-      to: { row: headerRowNum + sales.length, column: 13 }
-    };
-
-    // Pie de página
-    const footerRowNum = headerRowNum + sales.length + 2;
-    worksheet.mergeCells(`A${footerRowNum}:M${footerRowNum}`);
-    const cellFooter = worksheet.getCell(`A${footerRowNum}`);
-    cellFooter.value = 'Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A.';
-    cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
-    cellFooter.alignment = { horizontal: 'center', vertical: 'middle' };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Ventas_GvAutoPartes_${fecha.replace(/\//g, '-')}.xlsx`;
+    a.download = `Ventas_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Respaldo JSON
   const exportJSON = () => {
     const data = { items, sales, exportDate: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -687,7 +538,6 @@ export default function App() {
     }
   };
 
-  // Componente de badge de estado
   const StatusBadge = ({ status }: { status: string }) => {
     const colors: Record<string, string> = {
       ok: 'bg-green-100 text-green-800',
@@ -712,7 +562,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -748,11 +597,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
         {currentView === 'inventory' ? (
           <>
-            {/* Stats Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="bg-white rounded-lg shadow p-3 sm:p-4">
                 <p className="text-xs sm:text-sm text-gray-600">Total</p>
@@ -780,7 +627,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Filters */}
             <div className="bg-white rounded-lg shadow p-3 sm:p-4 mb-4 sm:mb-6">
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
@@ -796,7 +642,7 @@ export default function App() {
                   className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                 >
                   <option value="all">Todas las Categorías</option>
-                  {categories.map(cat => (
+                  {categories.map((cat: any) => (
                     <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
                   ))}
                 </select>
@@ -816,7 +662,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={exportToExcel} className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm transition-colors">
                 📥 Exportar Excel
@@ -836,7 +681,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Inventory Table */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs sm:text-sm">
@@ -845,79 +689,88 @@ export default function App() {
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">SKU</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700">Descripción</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Vehículos</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">PDF</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Factura</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Stock</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Precio</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Estado</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredItems.map(item => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-mono text-blue-600 font-semibold">{item.sku}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3">
-                          <div className="font-medium text-gray-900">{item.description}</div>
-                          <div className="text-xs text-gray-500 md:hidden">{item.vehicles}</div>
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-600 hidden md:table-cell">{item.vehicles}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <input
-                            type="number"
-                            value={item.qtyPdf}
-                            onChange={(e) => updateQtyPdf(item.id, e.target.value)}
-                            className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
-                          />
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <input
-                            type="number"
-                            value={item.qtyReceived || ''}
-                            onChange={(e) => updateQtyReceived(item.id, e.target.value)}
-                            className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => updateUnitPrice(item.id, e.target.value)}
-                            className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <StatusBadge status={calculateStatus(item.qtyPdf, item.qtyReceived)} />
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
-                          <div className="flex gap-1 justify-center flex-wrap">
-                            <button
-                              onClick={() => handleOpenSaleModal(item)}
-                              disabled={getStockForItem(item) <= 0}
-                              className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium transition-colors"
-                              title="Vender"
-                            >
-                              💰
-                            </button>
-                            <button
-                              onClick={() => handleEditItem(item)}
-                              className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium transition-colors"
-                              title="Editar"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => handleDeleteItem(item.id, item.sku)}
-                              className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition-colors"
-                              title="Eliminar"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredItems.map(item => {
+                      const stock = getStockForItem(item);
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 font-mono text-blue-600 font-semibold">{item.sku}</td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3">
+                            <div className="font-medium text-gray-900">{item.description}</div>
+                            <div className="text-xs text-gray-500 md:hidden">{item.vehicles}</div>
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-600 hidden md:table-cell">{item.vehicles}</td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <input
+                              type="number"
+                              value={item.qtyPdf}
+                              onChange={(e) => updateQtyPdf(item.id, e.target.value)}
+                              className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                            />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <input
+                              type="number"
+                              value={item.qtyReceived || ''}
+                              onChange={(e) => updateQtyReceived(item.id, e.target.value)}
+                              className="w-14 sm:w-16 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <span className={`font-bold ${stock <= 0 ? 'text-red-600' : stock < 5 ? 'text-orange-600' : 'text-green-600'}`}>
+                              {stock}
+                            </span>
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <input
+                              type="number"
+                              value={item.unitPrice}
+                              onChange={(e) => updateUnitPrice(item.id, e.target.value)}
+                              className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <StatusBadge status={calculateStatus(item.qtyPdf, item.qtyReceived)} />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <div className="flex gap-1 justify-center flex-wrap">
+                              <button
+                                onClick={() => handleOpenSaleModal(item)}
+                                disabled={stock <= 0}
+                                className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                                title={stock <= 0 ? 'Sin stock' : 'Vender'}
+                              >
+                                💰
+                              </button>
+                              <button
+                                onClick={() => handleEditItem(item)}
+                                className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium transition-colors"
+                                title="Editar"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => handleDeleteItem(item.id, item.sku)}
+                                className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition-colors"
+                                title="Eliminar"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -925,7 +778,6 @@ export default function App() {
           </>
         ) : (
           <>
-            {/* Sales Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="bg-green-50 rounded-lg shadow p-3 sm:p-4">
                 <p className="text-xs sm:text-sm text-gray-600">💰 Total Vendido</p>
@@ -949,7 +801,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Alerts */}
             {outOfStockItems.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4">
                 <h3 className="text-base sm:text-lg font-bold text-red-800 mb-2">❌ Productos Sin Stock</h3>
@@ -979,14 +830,12 @@ export default function App() {
               </div>
             )}
 
-            {/* Sales Action Buttons */}
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={exportSalesToExcel} className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm transition-colors">
                 📥 Exportar Ventas Excel
               </button>
             </div>
 
-            {/* Sales by Month */}
             {Object.keys(monthlySales).length > 0 ? (
               <div className="space-y-4 sm:space-y-6">
                 {Object.keys(monthlySales).sort().reverse().map(month => {
@@ -1074,7 +923,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Sale Modal */}
       {showSaleModal && selectedItemForSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -1208,7 +1056,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Edit Sale Modal */}
       {showEditSaleModal && editingSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -1338,119 +1185,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Add Product Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
-              <h2 className="text-lg sm:text-xl font-bold">➕ Agregar Nuevo Producto</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">SKU *</label>
-                <input
-                  type="text"
-                  value={newItem.sku}
-                  onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
-                  placeholder="Ej: BUJ-001"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
-                <input
-                  type="text"
-                  value={newItem.description}
-                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                  placeholder="Ej: Bujía NGK BKR6E-11"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Vehículos Compatibles</label>
-                <textarea
-                  value={newItem.vehicles}
-                  onChange={(e) => setNewItem({ ...newItem, vehicles: e.target.value })}
-                  placeholder="Ej: Toyota Corolla, Honda Civic"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Categoría *</label>
-                <select
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                >
-                  <option value="">Seleccionar categoría existente...</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">O crear nueva categoría</label>
-                <input
-                  type="text"
-                  value={newItem.newCategory}
-                  onChange={(e) => setNewItem({ ...newItem, newCategory: e.target.value })}
-                  placeholder="Ej: Frenos"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad PDF</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newItem.qtyPdf}
-                    onChange={(e) => setNewItem({ ...newItem, qtyPdf: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad Física</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newItem.qtyReceived === null ? '' : newItem.qtyReceived}
-                    onChange={(e) => setNewItem({ ...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 sm:gap-3 pt-2">
-                <button
-                  onClick={handleAddItem}
-                  className="flex-1 bg-emerald-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-emerald-700 font-semibold text-sm sm:text-base transition-colors"
-                >
-                  ✅ Agregar
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, inPdf: true, inExcel: true, inPhysical: false });
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
-                >
-                  ❌ Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Product Modal */}
       {showEditModal && editingItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -1522,16 +1256,29 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editingItem.unitPrice}
-                  onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                />
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingItem.unitPrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingItem.salePrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2 sm:gap-3">
@@ -1543,6 +1290,144 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ❌ Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <h2 className="text-lg sm:text-xl font-bold">➕ Agregar Nuevo Producto</h2>
+            </div>
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">SKU *</label>
+                <input
+                  type="text"
+                  value={newItem.sku}
+                  onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
+                  placeholder="Ej: BUJ-001"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
+                <input
+                  type="text"
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  placeholder="Ej: Bujía NGK BKR6E-11"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Vehículos Compatibles</label>
+                <textarea
+                  value={newItem.vehicles}
+                  onChange={(e) => setNewItem({ ...newItem, vehicles: e.target.value })}
+                  placeholder="Ej: Toyota Corolla, Honda Civic"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Categoría *</label>
+                <select
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                >
+                  <option value="">Seleccionar categoría existente...</option>
+                  {categories.map((cat: any) => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">O crear nueva categoría</label>
+                <input
+                  type="text"
+                  value={newItem.newCategory}
+                  onChange={(e) => setNewItem({ ...newItem, newCategory: e.target.value })}
+                  placeholder="Ej: Frenos"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad PDF</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyPdf}
+                    onChange={(e) => setNewItem({ ...newItem, qtyPdf: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Cantidad Física</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newItem.qtyReceived === null ? '' : newItem.qtyReceived}
+                    onChange={(e) => setNewItem({ ...newItem, qtyReceived: e.target.value === '' ? null : parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.unitPrice}
+                    onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.salePrice}
+                    onChange={(e) => setNewItem({ ...newItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:gap-3 pt-2">
+                <button
+                  onClick={handleAddItem}
+                  className="flex-1 bg-emerald-600 text-white px-4 py-2 sm:py-3 rounded-lg hover:bg-emerald-700 font-semibold text-sm sm:text-base transition-colors"
+                >
+                  ✅ Agregar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
+                  }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
                   ❌ Cancelar
