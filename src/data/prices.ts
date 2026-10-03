@@ -324,4 +324,14 @@ export const unitPrices: Record<string, number> = {
   'F058': 5.19,
   'F351': 5.55,
   'F139L': 5.89,
+  
+  // Aceites de Motor (nuevos)
+  '19525956': 9.72,
+  '4231352-C12': 10.65,
+  '4555020-C12': 10.65,
+  '52135366': 10.09,
+  
+  // Lubricantes y Líquidos
+  'LX-946DOT3': 8.35,
+  'LX-3500': 43.00,
 };

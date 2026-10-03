@@ -374,10 +374,22 @@ export const inventoryData: Category[] = [
       { sku: 'ART-015027', description: 'Mobil Super 2000 X1 10W40 Semi Sintético CAJA 12x0.95L', vehicles: 'Vehículos a gasolina de pasajeros o suvs que requieran viscosidad semi-sintética SAE 10W-40', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: 'ART-014908', description: 'Mobil Special Alto Kilometraje 25W50 CAJA 12x0.95L', vehicles: 'Vehículos con más de 100,000 km que requieran aceite de mayor viscosidad SAE 25W-50', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
       { sku: 'ART-014964', description: 'Lubrex Mineral Velocity Nano SAE 15W40 SM/CF CAJA 12x1LT', vehicles: 'Motores a gasolina o diésel que requieran aceite mineral de viscosidad SAE 15W-40 API SM/CF', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: '19525956', description: 'Aceite 15W40 Semisintético', vehicles: 'Universal (ACDELCO)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: '4231352-C12', description: 'Aceite 5W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: '4555020-C12', description: 'Aceite 10W30 Semisintético SN', vehicles: 'Universal (MOTORCRAFT)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
+      { sku: '52135366', description: 'Aceite 20W50 Mineral', vehicles: 'Universal (ACDELCO)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Aceites de Motor' },
     ],
   },
   {
     id: 15,
+    name: 'Lubricantes y Líquidos',
+    items: [
+      { sku: 'LX-946DOT3', description: 'Liga de Freno DOT3 946ml', vehicles: 'Universal (LUXOIL)', qtyPdf: 12, qtyPhysical: 12, status: 'ok', category: 'Lubricantes y Líquidos' },
+      { sku: 'LX-3500', description: 'Grasa Azul Alta Temperatura 3,5kg', vehicles: 'Universal (LUXOIL)', qtyPdf: 2, qtyPhysical: 2, status: 'ok', category: 'Lubricantes y Líquidos' },
+    ],
+  },
+  {
+    id: 16,
     name: 'Productos Flamingo',
     items: [
       { sku: 'F353', description: 'Abrillantador de Caucho en Gel', vehicles: 'Universal (Flamingo)', qtyPdf: 6, qtyPhysical: 6, status: 'ok', category: 'Productos Flamingo' },
