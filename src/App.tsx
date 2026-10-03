@@ -456,29 +456,138 @@ export default function App() {
 
   const exportSalesToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Ventas');
+    workbook.creator = 'GvAutoPartes';
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Reporte de Ventas', { properties: { defaultRowHeight: 20 } });
 
+    // Calcular estadísticas
+    const totalVentas = sales.length;
+    const montoTotal = sales.reduce((sum, s) => sum + s.totalPrice, 0);
+    const gananciaTotal = sales.reduce((sum, s) => sum + ((s.salePrice - s.unitPrice) * s.quantity), 0);
+    const ventasPagadas = sales.filter(s => !s.paymentPending).length;
+    const ventasPendientes = sales.filter(s => s.paymentPending).length;
+    const montoPendiente = sales.filter(s => s.paymentPending).reduce((sum, s) => sum + s.totalPrice, 0);
+
+    // Configurar columnas
     worksheet.columns = [
-      { header: 'Fecha', key: 'date', width: 12 },
-      { header: 'Cliente', key: 'customerName', width: 20 },
-      { header: 'Teléfono', key: 'customerPhone', width: 15 },
-      { header: 'Cédula', key: 'customerId', width: 12 },
-      { header: 'SKU', key: 'sku', width: 15 },
-      { header: 'Producto', key: 'description', width: 30 },
-      { header: 'Cantidad', key: 'quantity', width: 10 },
-      { header: 'Precio Ref.', key: 'unitPrice', width: 12 },
-      { header: 'Precio Venta', key: 'salePrice', width: 12 },
-      { header: 'Total', key: 'totalPrice', width: 12 },
-      { header: 'Ganancia', key: 'profit', width: 12 },
-      { header: 'Notas', key: 'notes', width: 25 },
+      { key: 'num', width: 6 },
+      { key: 'date', width: 13 },
+      { key: 'customerName', width: 22 },
+      { key: 'customerPhone', width: 15 },
+      { key: 'customerId', width: 14 },
+      { key: 'sku', width: 16 },
+      { key: 'description', width: 35 },
+      { key: 'quantity', width: 10 },
+      { key: 'unitPrice', width: 13 },
+      { key: 'salePrice', width: 13 },
+      { key: 'totalPrice', width: 13 },
+      { key: 'profit', width: 13 },
+      { key: 'payment', width: 14 },
+      { key: 'notes', width: 25 },
     ];
 
-    sales.forEach(sale => {
+    // === ENCABEZADO CORPORATIVO ===
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-VE');
+    const hora = now.toLocaleTimeString('es-VE');
+
+    // Fila 1: Nombre de empresa con fondo azul oscuro
+    worksheet.mergeCells('A1:N1');
+    const cellEmpresa = worksheet.getCell('A1');
+    cellEmpresa.value = '🏪 GvAutoPartes - Sistema de Ventas';
+    cellEmpresa.font = { name: 'Arial', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+    cellEmpresa.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellEmpresa.border = {
+      bottom: { style: 'thick', color: { argb: 'FF10B981' } }
+    };
+    worksheet.getRow(1).height = 40;
+
+    // Fila 2: Subtítulo
+    worksheet.mergeCells('A2:N2');
+    const cellSubtitulo = worksheet.getCell('A2');
+    cellSubtitulo.value = 'REPORTE DETALLADO DE VENTAS';
+    cellSubtitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
+    cellSubtitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellSubtitulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+    worksheet.getRow(2).height = 30;
+
+    // Fila 3: Información del reporte
+    worksheet.mergeCells('A3:G3');
+    worksheet.getCell('A3').value = `📅 Fecha de Exportación: ${fecha} | ⏰ ${hora}`;
+    worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
+    worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+
+    worksheet.mergeCells('H3:N3');
+    worksheet.getCell('H3').value = `📊 Total de Ventas: ${totalVentas} transacciones`;
+    worksheet.getCell('H3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    worksheet.getCell('H3').alignment = { horizontal: 'right', vertical: 'middle' };
+    worksheet.getRow(3).height = 22;
+
+    // Fila 4: Resumen Financiero con fondo verde claro
+    worksheet.mergeCells('A4:N4');
+    const cellResumen = worksheet.getCell('A4');
+    cellResumen.value = `💰 Monto Total Vendido: $${montoTotal.toFixed(2)}  |  📈 Ganancia Total: $${gananciaTotal.toFixed(2)}  |  ✅ Pagadas: ${ventasPagadas}  |  ⏳ Pendientes: ${ventasPendientes} ($${montoPendiente.toFixed(2)})`;
+    cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF065F46' } };
+    cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+    cellResumen.border = {
+      top: { style: 'thin', color: { argb: 'FF10B981' } },
+      bottom: { style: 'thin', color: { argb: 'FF10B981' } }
+    };
+    worksheet.getRow(4).height = 28;
+
+    // Fila 5: Espacio
+    worksheet.getRow(5).height = 10;
+
+    // === TABLA DE DATOS ===
+    const headerRowNum = 6;
+    const headerRow = worksheet.getRow(headerRowNum);
+    
+    // Encabezados de tabla con diseño profesional
+    const headers = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cant.', 'P. Ref.', 'P. Venta', 'Total', 'Ganancia', 'Estado Pago', 'Notas'];
+    headers.forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        left: { style: 'thin', color: { argb: 'FF93C5FD' } },
+        bottom: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        right: { style: 'thin', color: { argb: 'FF93C5FD' } }
+      };
+    });
+    headerRow.height = 30;
+
+    // Agregar datos de ventas
+    sales.forEach((sale, index) => {
       const profit = (sale.salePrice - sale.unitPrice) * sale.quantity;
-      const dateObj = new Date(sale.date);
-      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
       
-      worksheet.addRow({
+      // Formatear fecha correctamente
+      let formattedDate = '';
+      if (sale.date) {
+        if (sale.date.includes('-')) {
+          const parts = sale.date.split('-');
+          if (parts.length === 3) {
+            formattedDate = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+          }
+        } else {
+          const dateObj = new Date(sale.date);
+          if (!isNaN(dateObj.getTime())) {
+            const day = dateObj.getDate().toString().padStart(2, '0');
+            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const year = dateObj.getFullYear();
+            formattedDate = `${day}/${month}/${year}`;
+          }
+        }
+      }
+
+      const paymentStatus = sale.paymentPending ? '⏳ PENDIENTE' : '✅ PAGADO';
+      
+      const row = worksheet.addRow({
+        num: index + 1,
         date: formattedDate,
         customerName: sale.customerName,
         customerPhone: sale.customerPhone || '',
@@ -490,17 +599,172 @@ export default function App() {
         salePrice: sale.salePrice,
         totalPrice: sale.totalPrice,
         profit: profit,
+        payment: paymentStatus,
         notes: sale.notes || '',
       });
+
+      // Estilo de filas con efecto cebra
+      const isEven = index % 2 === 0;
+      const baseColor = isEven ? 'FFFFFFFF' : 'FFF9FAFB';
+      
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9, color: { argb: 'FF1F2937' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseColor } };
+        cell.border = {
+          top: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'hair', color: { argb: 'FFE5E7EB' } }
+        };
+
+        // Alineaciones específicas por columna
+        if (colNumber === 1) { // N°
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF6B7280' } };
+        } else if (colNumber === 2) { // Fecha
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 3 || colNumber === 4 || colNumber === 5) { // Cliente, Teléfono, Cédula
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        } else if (colNumber === 6) { // SKU
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+          cell.font = { name: 'Consolas', size: 9, bold: true, color: { argb: 'FF2563EB' } };
+        } else if (colNumber === 7) { // Descripción
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else if (colNumber === 8) { // Cantidad
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.font = { name: 'Arial', size: 9, bold: true };
+        } else if (colNumber >= 9 && colNumber <= 12) { // Precios y totales
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '$#,##0.00';
+          
+          if (colNumber === 9) { // Precio Ref
+            cell.font = { name: 'Arial', size: 9, color: { argb: 'FF6B7280' } };
+          } else if (colNumber === 10) { // Precio Venta
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF059669' } };
+          } else if (colNumber === 11) { // Total
+            cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E40AF' } };
+          } else if (colNumber === 12) { // Ganancia
+            const profitValue = cell.value as number;
+            if (profitValue > 0) {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF10B981' } };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            } else if (profitValue < 0) {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFEF4444' } };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+            } else {
+              cell.font = { name: 'Arial', size: 9, color: { argb: 'FF6B7280' } };
+            }
+          }
+        } else if (colNumber === 13) { // Estado de Pago
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          if (sale.paymentPending) {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFB45309' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          } else {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF065F46' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+          }
+        } else if (colNumber === 14) { // Notas
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+          cell.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF6B7280' } };
+        }
+      });
+
+      row.height = 22;
     });
 
+    // === FILA DE TOTALES ===
+    if (sales.length > 0) {
+      const totalRowNum = headerRowNum + sales.length + 1;
+      const totalRow = worksheet.getRow(totalRowNum);
+      
+      worksheet.mergeCells(`A${totalRowNum}:H${totalRowNum}`);
+      const totalLabel = worksheet.getCell(`A${totalRowNum}`);
+      totalLabel.value = '📊 TOTALES GENERALES';
+      totalLabel.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalLabel.border = {
+        top: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        bottom: { style: 'medium', color: { argb: 'FF1E3A8A' } }
+      };
+
+      // Total de ventas
+      const totalQtyCell = worksheet.getCell(`I${totalRowNum}`);
+      totalQtyCell.value = sales.reduce((sum, s) => sum + s.quantity, 0);
+      totalQtyCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalQtyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalQtyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalQtyCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Precio Ref Total
+      worksheet.getCell(`J${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      worksheet.getCell(`J${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Precio Venta Total
+      const totalSalePriceCell = worksheet.getCell(`K${totalRowNum}`);
+      totalSalePriceCell.value = montoTotal;
+      totalSalePriceCell.numFmt = '$#,##0.00';
+      totalSalePriceCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalSalePriceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalSalePriceCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      totalSalePriceCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Ganancia Total
+      const totalProfitCell = worksheet.getCell(`L${totalRowNum}`);
+      totalProfitCell.value = gananciaTotal;
+      totalProfitCell.numFmt = '$#,##0.00';
+      totalProfitCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalProfitCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+      totalProfitCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      totalProfitCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Estado Pago
+      worksheet.getCell(`M${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      worksheet.getCell(`M${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Notas
+      worksheet.getCell(`N${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      worksheet.getCell(`N${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      totalRow.height = 30;
+    }
+
+    // === PIE DE PÁGINA ===
+    const footerRowNum = headerRowNum + sales.length + 3;
+    worksheet.mergeCells(`A${footerRowNum}:N${footerRowNum}`);
+    const cellFooter = worksheet.getCell(`A${footerRowNum}`);
+    cellFooter.value = '📄 Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A. | Documento: 80010868';
+    cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
+    cellFooter.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellFooter.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+    cellFooter.border = {
+      top: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+    };
+
+    // Congelar paneles (encabezados)
+    worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
+
+    // Activar autofiltros
+    if (sales.length > 0) {
+      worksheet.autoFilter = {
+        from: { row: headerRowNum, column: 1 },
+        to: { row: headerRowNum + sales.length, column: 14 }
+      };
+    }
+
+    // Generar y descargar
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Ventas_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    const fechaArchivo = fecha.replace(/\//g, '-');
+    a.download = `Reporte_Ventas_GvAutoPartes_${fechaArchivo}.xlsx`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
