@@ -247,6 +247,7 @@ export default function App() {
     setSalePrice(item.unitPrice);
     setSaleDate(new Date().toISOString().split('T')[0]);
     setSaleNotes('');
+    setSalePaymentPending(false);
     setShowSaleModal(true);
   };
 
@@ -764,7 +765,7 @@ export default function App() {
     const hora = now.toLocaleTimeString('es-VE');
 
     // Fila 1: Nombre de empresa con fondo azul oscuro
-    worksheet.mergeCells('A1:N1');
+    worksheet.mergeCells('A1:O1');
     const cellEmpresa = worksheet.getCell('A1');
     cellEmpresa.value = '🏪 GvAutoPartes - Sistema de Ventas';
     cellEmpresa.font = { name: 'Arial', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -776,7 +777,7 @@ export default function App() {
     worksheet.getRow(1).height = 40;
 
     // Fila 2: Subtítulo
-    worksheet.mergeCells('A2:N2');
+    worksheet.mergeCells('A2:O2');
     const cellSubtitulo = worksheet.getCell('A2');
     cellSubtitulo.value = 'REPORTE DETALLADO DE VENTAS';
     cellSubtitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
@@ -785,19 +786,19 @@ export default function App() {
     worksheet.getRow(2).height = 30;
 
     // Fila 3: Información del reporte
-    worksheet.mergeCells('A3:G3');
+    worksheet.mergeCells('A3:H3');
     worksheet.getCell('A3').value = `📅 Fecha de Exportación: ${fecha} | ⏰ ${hora}`;
     worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
     worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
 
-    worksheet.mergeCells('H3:N3');
-    worksheet.getCell('H3').value = `📊 Total de Ventas: ${totalVentas} transacciones`;
-    worksheet.getCell('H3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
-    worksheet.getCell('H3').alignment = { horizontal: 'right', vertical: 'middle' };
+    worksheet.mergeCells('I3:O3');
+    worksheet.getCell('I3').value = `📊 Total de Ventas: ${totalVentas} transacciones`;
+    worksheet.getCell('I3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    worksheet.getCell('I3').alignment = { horizontal: 'right', vertical: 'middle' };
     worksheet.getRow(3).height = 22;
 
     // Fila 4: Resumen Financiero con fondo verde claro
-    worksheet.mergeCells('A4:N4');
+    worksheet.mergeCells('A4:O4');
     const cellResumen = worksheet.getCell('A4');
     cellResumen.value = `💰 Monto Total Vendido: $${montoTotal.toFixed(2)}  |  📈 Ganancia Total: $${gananciaTotal.toFixed(2)}  |  ✅ Pagadas: ${ventasPagadas}  |  ⏳ Pendientes: ${ventasPendientes} ($${montoPendiente.toFixed(2)})`;
     cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF065F46' } };
@@ -1030,8 +1031,12 @@ export default function App() {
         bottom: { style: 'medium', color: { argb: 'FF6B7280' } }
       };
 
+      // Moneda - Vacío
+      worksheet.getCell(`M${paymentSummaryRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B7280' } };
+      worksheet.getCell(`M${paymentSummaryRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
       // Pagado
-      const paidCell = worksheet.getCell(`M${paymentSummaryRowNum}`);
+      const paidCell = worksheet.getCell(`N${paymentSummaryRowNum}`);
       paidCell.value = `✅ $${(montoTotal - montoPendiente).toFixed(2)}`;
       paidCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF065F46' } };
       paidCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
@@ -1044,7 +1049,7 @@ export default function App() {
       };
 
       // Pendiente
-      const pendingCell = worksheet.getCell(`N${paymentSummaryRowNum}`);
+      const pendingCell = worksheet.getCell(`O${paymentSummaryRowNum}`);
       pendingCell.value = `⏳ $${montoPendiente.toFixed(2)}`;
       pendingCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB45309' } };
       pendingCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
@@ -1061,7 +1066,7 @@ export default function App() {
 
     // === PIE DE PÁGINA ===
     const footerRowNum = headerRowNum + sales.length + (sales.length > 0 ? 5 : 3);
-    worksheet.mergeCells(`A${footerRowNum}:N${footerRowNum}`);
+    worksheet.mergeCells(`A${footerRowNum}:O${footerRowNum}`);
     const cellFooter = worksheet.getCell(`A${footerRowNum}`);
     cellFooter.value = '📄 Documento generado automáticamente por el Sistema de Ventas de GvAutoPartes | Proveedor: Guzimport, C.A. | Documento: 80010868';
     cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
@@ -1526,7 +1531,9 @@ export default function App() {
                                 <td className="px-2 sm:px-4 py-2 text-center font-bold">{sale.quantity}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right text-gray-500 hidden sm:table-cell">${sale.unitPrice.toFixed(2)}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
-                                <td className="px-2 sm:px-4 py-2 text-right font-bold text-green-700">${sale.totalPrice.toFixed(2)}</td>
+                                <td className="px-2 sm:px-4 py-2 text-right font-bold text-green-700">
+                                  ${sale.totalPrice.toFixed(2)}
+                                </td>
                                 <td className="px-2 sm:px-4 py-2 text-center">
                                   <label className="inline-flex items-center cursor-pointer">
                                     <input
@@ -1704,7 +1711,9 @@ export default function App() {
               <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 sm:p-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs sm:text-sm font-semibold text-gray-700">Total:</span>
-                  <span className="text-lg sm:text-2xl font-bold text-green-700">${(saleQuantity * salePrice).toFixed(2)}</span>
+                  <span className="text-lg sm:text-2xl font-bold text-green-700">
+                    ${(saleQuantity * salePrice).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
