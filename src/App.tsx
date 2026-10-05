@@ -55,7 +55,14 @@ const logout = () => localStorage.removeItem(AUTH_KEY);
 const loadItems = (): TrackedItem[] => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    
+    const items: TrackedItem[] = JSON.parse(saved);
+    // Asegurar que todos los items tengan salePrice (compatibilidad con versiones anteriores)
+    return items.map(item => ({
+      ...item,
+      salePrice: item.salePrice !== undefined ? item.salePrice : item.unitPrice
+    }));
   } catch {
     return [];
   }
@@ -423,43 +430,298 @@ export default function App() {
 
   const exportToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Inventario');
+    workbook.creator = 'GvAutoPartes';
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Inventario', { properties: { defaultRowHeight: 20 } });
 
+    // Calcular estadísticas
+    const totalProductos = items.length;
+    const totalStock = items.reduce((sum, i) => sum + getStockForItem(i), 0);
+    const valorInventario = items.reduce((sum, i) => sum + (getStockForItem(i) * i.unitPrice), 0);
+    const valorVenta = items.reduce((sum, i) => sum + (getStockForItem(i) * i.salePrice), 0);
+
+    // Configurar columnas
     worksheet.columns = [
-      { header: 'SKU', key: 'sku', width: 15 },
-      { header: 'Descripción', key: 'description', width: 30 },
-      { header: 'Vehículos', key: 'vehicles', width: 25 },
-      { header: 'Categoría', key: 'category', width: 20 },
-      { header: 'Cantidad Factura', key: 'qtyPdf', width: 12 },
-      { header: 'Cantidad Física', key: 'qtyReceived', width: 15 },
-      { header: 'Stock Actual', key: 'stock', width: 12 },
-      { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
-      { header: 'Precio Venta', key: 'salePrice', width: 15 },
-      { header: 'Estado', key: 'status', width: 12 },
+      { key: 'num', width: 6 },
+      { key: 'sku', width: 16 },
+      { key: 'description', width: 35 },
+      { key: 'vehicles', width: 30 },
+      { key: 'category', width: 20 },
+      { key: 'qtyPdf', width: 12 },
+      { key: 'qtyReceived', width: 13 },
+      { key: 'stock', width: 11 },
+      { key: 'unitPrice', width: 13 },
+      { key: 'salePrice', width: 13 },
+      { key: 'status', width: 12 },
     ];
 
-    items.forEach(item => {
-      worksheet.addRow({
+    // === ENCABEZADO CORPORATIVO ===
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-VE');
+    const hora = now.toLocaleTimeString('es-VE');
+
+    // Fila 1: Nombre de empresa con fondo azul oscuro
+    worksheet.mergeCells('A1:K1');
+    const cellEmpresa = worksheet.getCell('A1');
+    cellEmpresa.value = '🏪 GvAutoPartes - Sistema de Inventario';
+    cellEmpresa.font = { name: 'Arial', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+    cellEmpresa.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cellEmpresa.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellEmpresa.border = {
+      bottom: { style: 'thick', color: { argb: 'FF10B981' } }
+    };
+    worksheet.getRow(1).height = 40;
+
+    // Fila 2: Subtítulo
+    worksheet.mergeCells('A2:K2');
+    const cellSubtitulo = worksheet.getCell('A2');
+    cellSubtitulo.value = 'REPORTE DE INVENTARIO';
+    cellSubtitulo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF374151' } };
+    cellSubtitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellSubtitulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+    worksheet.getRow(2).height = 30;
+
+    // Fila 3: Metadatos
+    worksheet.mergeCells('A3:F3');
+    worksheet.getCell('A3').value = `📅 Fecha: ${fecha} | ⏰ ${hora}`;
+    worksheet.getCell('A3').font = { name: 'Arial', size: 10, color: { argb: 'FF6B7280' } };
+    worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+
+    worksheet.mergeCells('G3:K3');
+    worksheet.getCell('G3').value = `📦 Total: ${totalProductos} productos | 🏷️ Stock: ${totalStock} unidades`;
+    worksheet.getCell('G3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    worksheet.getCell('G3').alignment = { horizontal: 'right', vertical: 'middle' };
+    worksheet.getRow(3).height = 22;
+
+    // Fila 4: Resumen financiero
+    worksheet.mergeCells('A4:K4');
+    const cellResumen = worksheet.getCell('A4');
+    cellResumen.value = `💰 Valor Inventario (Costo): $${valorInventario.toFixed(2)} | 💵 Valor Inventario (Venta): $${valorVenta.toFixed(2)} | 📈 Ganancia Potencial: $${(valorVenta - valorInventario).toFixed(2)}`;
+    cellResumen.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF065F46' } };
+    cellResumen.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+    cellResumen.border = {
+      top: { style: 'thin', color: { argb: 'FF10B981' } },
+      bottom: { style: 'thin', color: { argb: 'FF10B981' } }
+    };
+    worksheet.getRow(4).height = 28;
+
+    // Fila 5: Espacio
+    worksheet.getRow(5).height = 10;
+
+    // === TABLA DE DATOS ===
+    const headerRowNum = 6;
+    const headerRow = worksheet.getRow(headerRowNum);
+    
+    // Encabezados de tabla con diseño profesional
+    const headers = ['N°', 'SKU', 'Descripción', 'Vehículos', 'Categoría', 'Factura', 'Físico', 'Stock', 'P. Unitario', 'P. Venta', 'Estado'];
+    headers.forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        left: { style: 'thin', color: { argb: 'FF93C5FD' } },
+        bottom: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        right: { style: 'thin', color: { argb: 'FF93C5FD' } }
+      };
+    });
+    headerRow.height = 30;
+
+    // Agregar datos de inventario
+    items.forEach((item, index) => {
+      const stock = getStockForItem(item);
+      const status = calculateStatus(item.qtyPdf, item.qtyReceived);
+      const statusText = {
+        'ok': '✅ Completo',
+        'missing': '❌ Faltante',
+        'partial': '⚠️ Parcial',
+        'pending': '⏳ Pendiente',
+        'extra': '⭐ Extra'
+      }[status];
+      
+      const row = worksheet.addRow({
+        num: index + 1,
         sku: item.sku,
         description: item.description,
         vehicles: item.vehicles,
         category: item.category,
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyReceived || 0,
-        stock: getStockForItem(item),
+        stock: stock,
         unitPrice: item.unitPrice,
         salePrice: item.salePrice,
-        status: calculateStatus(item.qtyPdf, item.qtyReceived),
+        status: statusText,
       });
+
+      // Estilo de filas con efecto cebra
+      const isEven = index % 2 === 0;
+      const baseColor = isEven ? 'FFFFFFFF' : 'FFF9FAFB';
+      
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9, color: { argb: 'FF1F2937' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseColor } };
+        cell.border = {
+          top: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'hair', color: { argb: 'FFE5E7EB' } }
+        };
+
+        // Alineaciones específicas por columna
+        if (colNumber === 1) { // N°
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF6B7280' } };
+        } else if (colNumber === 2) { // SKU
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+          cell.font = { name: 'Consolas', size: 9, bold: true, color: { argb: 'FF2563EB' } };
+        } else if (colNumber === 3 || colNumber === 4 || colNumber === 5) { // Descripción, Vehículos, Categoría
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else if (colNumber === 6 || colNumber === 7 || colNumber === 8) { // Factura, Físico, Stock
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.font = { name: 'Arial', size: 9, bold: true };
+          
+          // Colorear stock según cantidad
+          if (colNumber === 8) {
+            const stockValue = cell.value as number;
+            if (stockValue <= 0) {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFDC2626' } };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+            } else if (stockValue < 5) {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFEA580C' } };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+            } else {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF16A34A' } };
+            }
+          }
+        } else if (colNumber === 9) { // Precio Unitario
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '$#,##0.00';
+          cell.font = { name: 'Arial', size: 9, color: { argb: 'FF6B7280' } };
+        } else if (colNumber === 10) { // Precio Venta
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '$#,##0.00';
+          cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF059669' } };
+        } else if (colNumber === 11) { // Estado
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          if (status === 'ok') {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF16A34A' } };
+          } else if (status === 'missing') {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFDC2626' } };
+          } else if (status === 'partial') {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFEA580C' } };
+          } else if (status === 'pending') {
+            cell.font = { name: 'Arial', size: 9, color: { argb: 'FF6B7280' } };
+          } else if (status === 'extra') {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF2563EB' } };
+          }
+        }
+      });
+
+      row.height = 22;
     });
 
+    // === FILA DE TOTALES ===
+    if (items.length > 0) {
+      const totalRowNum = headerRowNum + items.length + 1;
+      
+      worksheet.mergeCells(`A${totalRowNum}:E${totalRowNum}`);
+      const totalLabel = worksheet.getCell(`A${totalRowNum}`);
+      totalLabel.value = '📊 TOTALES';
+      totalLabel.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalLabel.border = {
+        top: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+        bottom: { style: 'medium', color: { argb: 'FF1E3A8A' } }
+      };
+
+      // Total Factura
+      const totalFacturaCell = worksheet.getCell(`F${totalRowNum}`);
+      totalFacturaCell.value = items.reduce((sum, i) => sum + i.qtyPdf, 0);
+      totalFacturaCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalFacturaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalFacturaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalFacturaCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Total Físico
+      const totalFisicoCell = worksheet.getCell(`G${totalRowNum}`);
+      totalFisicoCell.value = items.reduce((sum, i) => sum + (i.qtyReceived || 0), 0);
+      totalFisicoCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalFisicoCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalFisicoCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalFisicoCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Total Stock
+      const totalStockCell = worksheet.getCell(`H${totalRowNum}`);
+      totalStockCell.value = totalStock;
+      totalStockCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalStockCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalStockCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalStockCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Total Valor Unitario
+      const totalUnitCell = worksheet.getCell(`I${totalRowNum}`);
+      totalUnitCell.value = valorInventario;
+      totalUnitCell.numFmt = '$#,##0.00';
+      totalUnitCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalUnitCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      totalUnitCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      totalUnitCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Total Valor Venta
+      const totalSaleCell = worksheet.getCell(`J${totalRowNum}`);
+      totalSaleCell.value = valorVenta;
+      totalSaleCell.numFmt = '$#,##0.00';
+      totalSaleCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      totalSaleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+      totalSaleCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      totalSaleCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      // Estado
+      worksheet.getCell(`K${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      worksheet.getCell(`K${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+
+      worksheet.getRow(totalRowNum).height = 30;
+    }
+
+    // === PIE DE PÁGINA ===
+    const footerRowNum = headerRowNum + items.length + 3;
+    worksheet.mergeCells(`A${footerRowNum}:K${footerRowNum}`);
+    const cellFooter = worksheet.getCell(`A${footerRowNum}`);
+    cellFooter.value = '📄 Documento generado automáticamente por el Sistema de Inventario de GvAutoPartes | Proveedor: Guzimport, C.A. | Documento: 80010868';
+    cellFooter.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF9CA3AF' } };
+    cellFooter.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellFooter.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+    cellFooter.border = {
+      top: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+    };
+
+    // Congelar paneles (encabezados)
+    worksheet.views = [{ state: 'frozen', ySplit: headerRowNum, xSplit: 0 }];
+
+    // Activar autofiltros
+    if (items.length > 0) {
+      worksheet.autoFilter = {
+        from: { row: headerRowNum, column: 1 },
+        to: { row: headerRowNum + items.length, column: 11 }
+      };
+    }
+
+    // Generar y descargar
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Inventario_GvAutoPartes_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    const fechaArchivo = fecha.replace(/\//g, '-');
+    a.download = `Inventario_GvAutoPartes_${fechaArchivo}.xlsx`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
