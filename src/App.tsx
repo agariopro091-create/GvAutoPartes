@@ -13,6 +13,7 @@ interface TrackedItem {
   qtyPdf: number;
   qtyReceived: number | null;
   unitPrice: number;
+  salePrice: number;
   status: 'ok' | 'missing' | 'partial' | 'pending' | 'extra';
   inPdf: boolean;
   inExcel: boolean;
@@ -36,8 +37,8 @@ interface Sale {
   paymentPending: boolean;
 }
 
-const STORAGE_KEY = 'gvautopartes_inventory_data_v10';
-const SALES_KEY = 'gvautopartes_sales_data_v10';
+const STORAGE_KEY = 'gvautopartes_inventory_data_v11';
+const SALES_KEY = 'gvautopartes_sales_data_v11';
 const AUTH_KEY = 'gvautopartes_auth';
 const DEFAULT_PASSWORD = 'gvautopartes2026';
 
@@ -95,6 +96,7 @@ const saveSales = (sales: Sale[]) => {
         qtyPdf: item.qtyPdf,
         qtyReceived: item.qtyPhysical,
         unitPrice: unitPrice,
+        salePrice: unitPrice,
         status: item.status,
         inPdf: true,
         inExcel: true,
@@ -207,6 +209,10 @@ export default function App() {
 
   const updateUnitPrice = (id: string, value: string) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, unitPrice: parseFloat(value) || 0 } : item));
+  };
+
+  const updateSalePrice = (id: string, value: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, salePrice: parseFloat(value) || 0 } : item));
   };
 
   const calculateStatus = (qtyPdf: number, qtyReceived: number | null): 'ok' | 'missing' | 'partial' | 'pending' | 'extra' => {
@@ -351,7 +357,8 @@ export default function App() {
       inPdf: newItem.inPdf,
       inExcel: newItem.inExcel,
       inPhysical: newItem.inPhysical,
-      unitPrice: 0
+      unitPrice: 0,
+      salePrice: 0
     };
     
     setItems(prev => [...prev, newItemData]);
@@ -427,6 +434,7 @@ export default function App() {
       { header: 'Cantidad Física', key: 'qtyReceived', width: 15 },
       { header: 'Stock Actual', key: 'stock', width: 12 },
       { header: 'Precio Unitario', key: 'unitPrice', width: 15 },
+      { header: 'Precio Venta', key: 'salePrice', width: 15 },
       { header: 'Estado', key: 'status', width: 12 },
     ];
 
@@ -440,6 +448,7 @@ export default function App() {
         qtyReceived: item.qtyReceived || 0,
         stock: getStockForItem(item),
         unitPrice: item.unitPrice,
+        salePrice: item.salePrice,
         status: calculateStatus(item.qtyPdf, item.qtyReceived),
       });
     });
@@ -1033,6 +1042,7 @@ export default function App() {
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Físico</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Stock</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Precio</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">P. Venta</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Estado</th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-semibold text-gray-700">Acciones</th>
                     </tr>
@@ -1077,6 +1087,16 @@ export default function App() {
                               onChange={(e) => updateUnitPrice(item.id, e.target.value)}
                               className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm"
                               step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <input
+                              type="number"
+                              value={item.salePrice}
+                              onChange={(e) => updateSalePrice(item.id, e.target.value)}
+                              className="w-16 sm:w-20 px-2 py-1 border-2 border-green-400 rounded text-center text-xs sm:text-sm font-semibold text-green-700"
+                              step="0.01"
+                              placeholder="0.00"
                             />
                           </td>
                           <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
@@ -1658,13 +1678,13 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta (x2)</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta</label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={editingItem.unitPrice}
-                    onChange={(e) => setEditingItem({ ...editingItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    value={editingItem.salePrice}
+                    onChange={(e) => setEditingItem({ ...editingItem, salePrice: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
                   />
                 </div>
