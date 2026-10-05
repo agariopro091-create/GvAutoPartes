@@ -35,7 +35,6 @@ interface Sale {
   customerId: string;
   notes: string;
   paymentPending: boolean;
-  currency: 'USD' | 'Bs' | 'EUR';
 }
 
 const STORAGE_KEY = 'gvautopartes_inventory_data_v11';
@@ -188,7 +187,6 @@ export default function App() {
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [saleNotes, setSaleNotes] = useState('');
   const [salePaymentPending, setSalePaymentPending] = useState(false);
-  const [saleCurrency, setSaleCurrency] = useState<'USD' | 'Bs' | 'EUR'>('USD');
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -250,7 +248,6 @@ export default function App() {
     setSaleDate(new Date().toISOString().split('T')[0]);
     setSaleNotes('');
     setSalePaymentPending(false);
-    setSaleCurrency('USD');
     setShowSaleModal(true);
   };
 
@@ -287,7 +284,6 @@ export default function App() {
       customerId: saleCustomerId,
       notes: saleNotes,
       paymentPending: salePaymentPending,
-      currency: saleCurrency,
     };
 
     // Registrar la venta
@@ -304,7 +300,6 @@ export default function App() {
     setSaleCustomerId('');
     setSaleNotes('');
     setSalePaymentPending(false);
-    setSaleCurrency('USD');
     
     alert(`✅ Venta registrada exitosamente\n📦 Stock actualizado automáticamente\n📊 Stock restante: ${getStockForItem(selectedItemForSale) - saleQuantity} unidades`);
   };
@@ -760,7 +755,6 @@ export default function App() {
       { key: 'salePrice', width: 13 },
       { key: 'totalPrice', width: 13 },
       { key: 'profit', width: 13 },
-      { key: 'currency', width: 10 },
       { key: 'payment', width: 18 }, // Más ancha para mejor visibilidad
       { key: 'notes', width: 25 },
     ];
@@ -824,7 +818,7 @@ export default function App() {
     const headerRow = worksheet.getRow(headerRowNum);
     
     // Encabezados de tabla con diseño profesional
-    const headers = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cant.', 'P. Ref.', 'P. Venta', 'Total', 'Ganancia', 'Moneda', 'Estado Pago', 'Notas'];
+    const headers = ['N°', 'Fecha', 'Cliente', 'Teléfono', 'Cédula', 'SKU', 'Producto', 'Cant.', 'P. Ref.', 'P. Venta', 'Total', 'Ganancia', 'Estado Pago', 'Notas'];
     headers.forEach((header, index) => {
       const cell = headerRow.getCell(index + 1);
       cell.value = header;
@@ -864,7 +858,6 @@ export default function App() {
       }
 
       const paymentStatus = sale.paymentPending ? '⏳ PENDIENTE' : '✅ PAGADO';
-      const currencySymbol = sale.currency === 'USD' ? '💵 USD' : sale.currency === 'Bs' ? '💰 Bs' : '💶 EUR';
       
       const row = worksheet.addRow({
         num: index + 1,
@@ -879,7 +872,6 @@ export default function App() {
         salePrice: sale.salePrice,
         totalPrice: sale.totalPrice,
         profit: profit,
-        currency: currencySymbol,
         payment: paymentStatus,
         notes: sale.notes || '',
       });
@@ -936,20 +928,7 @@ export default function App() {
               cell.font = { name: 'Arial', size: 9, color: { argb: 'FF6B7280' } };
             }
           }
-        } else if (colNumber === 13) { // Moneda
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          cell.font = { name: 'Arial', size: 9, bold: true };
-          if (sale.currency === 'USD') {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
-            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF065F46' } };
-          } else if (sale.currency === 'Bs') {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
-            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF1E40AF' } };
-          } else if (sale.currency === 'EUR') {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE9D5FF' } };
-            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF6B21A8' } };
-          }
-        } else if (colNumber === 14) { // Estado de Pago
+        } else if (colNumber === 13) { // Estado de Pago
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
           if (sale.paymentPending) {
             cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFB45309' } };
@@ -970,7 +949,7 @@ export default function App() {
               right: { style: 'medium', color: { argb: 'FF065F46' } }
             };
           }
-        } else if (colNumber === 15) { // Notas
+        } else if (colNumber === 14) { // Notas
           cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
           cell.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF6B7280' } };
         }
@@ -1025,12 +1004,8 @@ export default function App() {
       totalProfitCell.alignment = { horizontal: 'right', vertical: 'middle' };
       totalProfitCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
-      // Moneda - Vacío en totales
-      worksheet.getCell(`M${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      worksheet.getCell(`M${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
-
       // Estado Pago - Resumen
-      const paymentSummaryCell = worksheet.getCell(`N${totalRowNum}`);
+      const paymentSummaryCell = worksheet.getCell(`M${totalRowNum}`);
       paymentSummaryCell.value = `✅${ventasPagadas} | ⏳${ventasPendientes}`;
       paymentSummaryCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
       paymentSummaryCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
@@ -1038,8 +1013,8 @@ export default function App() {
       paymentSummaryCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
       // Notas
-      worksheet.getCell(`O${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      worksheet.getCell(`O${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
+      worksheet.getCell(`N${totalRowNum}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      worksheet.getCell(`N${totalRowNum}`).border = { top: { style: 'medium' }, bottom: { style: 'medium' } };
 
       totalRow.height = 30;
 
@@ -1536,7 +1511,6 @@ export default function App() {
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700 hidden sm:table-cell">P. Ref.</th>
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">P. Venta</th>
                               <th className="px-2 sm:px-4 py-2 text-right font-semibold text-gray-700">Total</th>
-                              <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700 hidden sm:table-cell">Moneda</th>
                               <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Pago</th>
                               <th className="px-2 sm:px-4 py-2 text-center font-semibold text-gray-700">Acciones</th>
                             </tr>
@@ -1558,21 +1532,7 @@ export default function App() {
                                 <td className="px-2 sm:px-4 py-2 text-right text-gray-500 hidden sm:table-cell">${sale.unitPrice.toFixed(2)}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right text-green-700 font-semibold">${sale.salePrice.toFixed(2)}</td>
                                 <td className="px-2 sm:px-4 py-2 text-right font-bold text-green-700">
-                                  {sale.currency === 'USD' && '$'}
-                                  {sale.currency === 'Bs' && 'Bs. '}
-                                  {sale.currency === 'EUR' && '€'}
-                                  {sale.totalPrice.toFixed(2)}
-                                </td>
-                                <td className="px-2 sm:px-4 py-2 text-center hidden sm:table-cell">
-                                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                    sale.currency === 'USD' ? 'bg-green-100 text-green-800' :
-                                    sale.currency === 'Bs' ? 'bg-blue-100 text-blue-800' :
-                                    'bg-purple-100 text-purple-800'
-                                  }`}>
-                                    {sale.currency === 'USD' && '💵 USD'}
-                                    {sale.currency === 'Bs' && '💰 Bs'}
-                                    {sale.currency === 'EUR' && '💶 EUR'}
-                                  </span>
+                                  ${sale.totalPrice.toFixed(2)}
                                 </td>
                                 <td className="px-2 sm:px-4 py-2 text-center">
                                   <label className="inline-flex items-center cursor-pointer">
@@ -1748,53 +1708,11 @@ export default function App() {
                 </label>
               </div>
 
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Moneda</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSaleCurrency('USD')}
-                    className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-                      saleCurrency === 'USD'
-                        ? 'bg-green-600 text-white shadow-md'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    💵 USD
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSaleCurrency('Bs')}
-                    className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-                      saleCurrency === 'Bs'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    💰 Bs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSaleCurrency('EUR')}
-                    className={`px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-                      saleCurrency === 'EUR'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    💶 EUR
-                  </button>
-                </div>
-              </div>
-
               <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 sm:p-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs sm:text-sm font-semibold text-gray-700">Total:</span>
                   <span className="text-lg sm:text-2xl font-bold text-green-700">
-                    {saleCurrency === 'USD' && '$'}
-                    {saleCurrency === 'Bs' && 'Bs. '}
-                    {saleCurrency === 'EUR' && '€'}
-                    {(saleQuantity * salePrice).toFixed(2)}
+                    ${(saleQuantity * salePrice).toFixed(2)}
                   </span>
                 </div>
               </div>
