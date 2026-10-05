@@ -196,6 +196,7 @@ export default function App() {
     sku: '', description: '', vehicles: '', category: '', newCategory: '',
     qtyPdf: 0, qtyReceived: null as number | null,
     unitPrice: 0,
+    salePrice: 0,
     inPdf: true, inExcel: true, inPhysical: false
   });
 
@@ -364,12 +365,12 @@ export default function App() {
       inPdf: newItem.inPdf,
       inExcel: newItem.inExcel,
       inPhysical: newItem.inPhysical,
-      unitPrice: 0,
-      salePrice: 0
+      unitPrice: newItem.unitPrice,
+      salePrice: newItem.salePrice
     };
     
     setItems(prev => [...prev, newItemData]);
-    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, inPdf: true, inExcel: true, inPhysical: false });
+    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
     setShowAddModal(false);
     alert('✅ Producto agregado exitosamente');
   };
@@ -1097,9 +1098,10 @@ export default function App() {
   };
 
   const exportJSON = () => {
-    // Solo respaldar ventas, no productos (los productos vienen del código fuente)
+    // Respaldo completo: inventario + ventas
     const data = { 
-      version: 'ventas-v1',
+      version: 'completo-v1',
+      items,
       sales, 
       exportDate: new Date().toISOString() 
     };
@@ -1107,7 +1109,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Respaldo_Ventas_GvAutoPartes_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `Respaldo_Completo_GvAutoPartes_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1121,17 +1123,32 @@ export default function App() {
       try {
         const data = JSON.parse(event.target?.result as string);
         
-        // Soportar formato nuevo (solo ventas) y antiguo (items + sales)
-        if (data.version === 'ventas-v1' && data.sales) {
-          // Nuevo formato: solo ventas
+        // Soportar formato completo (inventario + ventas)
+        if (data.version === 'completo-v1' && data.items && data.sales) {
+          setItems(data.items);
           setSales(data.sales);
+          saveItems(data.items);
+          saveSales(data.sales);
+          alert(`✅ Respaldo completo cargado:\n📦 ${data.items.length} productos\n💰 ${data.sales.length} ventas`);
+        } else if (data.version === 'ventas-v1' && data.sales) {
+          // Formato solo ventas
+          setSales(data.sales);
+          saveSales(data.sales);
           alert(`✅ Respaldo de ventas cargado: ${data.sales.length} ventas`);
-        } else if (data.sales) {
-          // Formato antiguo: tiene ventas
+        } else if (data.items && data.sales) {
+          // Formato antiguo: tiene ambos
+          setItems(data.items);
           setSales(data.sales);
-          alert(`✅ Respaldo cargado: ${data.sales.length} ventas`);
+          saveItems(data.items);
+          saveSales(data.sales);
+          alert(`✅ Respaldo completo cargado:\n📦 ${data.items.length} productos\n💰 ${data.sales.length} ventas`);
+        } else if (data.sales) {
+          // Solo ventas
+          setSales(data.sales);
+          saveSales(data.sales);
+          alert(`✅ Respaldo de ventas cargado: ${data.sales.length} ventas`);
         } else {
-          alert('❌ El archivo no contiene datos de ventas válidos');
+          alert('❌ El archivo no contiene datos válidos');
         }
       } catch {
         alert('❌ Error al cargar el respaldo');
@@ -2073,6 +2090,18 @@ export default function App() {
                     placeholder="0.00"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">Precio Venta</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.salePrice}
+                    onChange={(e) => setNewItem({ ...newItem, salePrice: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base font-semibold text-green-700"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2 sm:gap-3 pt-2">
@@ -2085,7 +2114,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, inPdf: true, inExcel: true, inPhysical: false });
+                    setNewItem({ sku: '', description: '', vehicles: '', category: '', newCategory: '', qtyPdf: 0, qtyReceived: null, unitPrice: 0, salePrice: 0, inPdf: true, inExcel: true, inPhysical: false });
                   }}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 sm:py-3 rounded-lg hover:bg-gray-300 font-semibold text-sm sm:text-base transition-colors"
                 >
